@@ -12,8 +12,9 @@ import { Plus, Package, AlertTriangle, ArrowRightLeft, Warehouse, Trash2, Histor
 import { notificationService } from '../services/notificationService';
 import { format } from 'date-fns';
 
-export default function InventoryModule({ profile }: { profile?: any }) {
+export default function InventoryModule({ profile, initialFilter = 'all' }: { profile?: any, initialFilter?: string }) {
   const [items, setItems] = useState<any[]>([]);
+  const [filterType, setFilterType] = useState<string>(initialFilter);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [newItem, setNewItem] = useState({
     name: '',
@@ -24,6 +25,12 @@ export default function InventoryModule({ profile }: { profile?: any }) {
     lowStockThreshold: 10,
     locationType: 'farm'
   });
+
+  useEffect(() => {
+    if (initialFilter) {
+      setFilterType(initialFilter);
+    }
+  }, [initialFilter]);
 
   useEffect(() => {
     if (!profile) return;
@@ -243,18 +250,66 @@ export default function InventoryModule({ profile }: { profile?: any }) {
         </div>
       </div>
 
+      {/* Filter Tabs */}
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none snap-x pointer-events-auto">
+        {[
+          { label: 'All Stock', value: 'all' },
+          { label: 'Hens / Birds', value: 'hen' },
+          { label: 'Ducks', value: 'duck' },
+          { label: 'Eggs', value: 'egg' },
+          { label: 'Goats', value: 'goat' },
+          { label: 'Fish', value: 'fish' },
+          { label: 'Feed', value: 'feed' },
+          { label: 'Medicine', value: 'medicine' },
+        ].map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setFilterType(tab.value)}
+            className={`px-4 py-2 text-xs font-black rounded-full uppercase tracking-wider transition-all duration-300 pointer-events-auto shrink-0 snap-start border ${
+              filterType === tab.value
+                ? 'bg-orange-600 text-white border-orange-600 shadow-md shadow-orange-100'
+                : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50 hover:text-stone-950'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {items.map((item) => {
+        {items.filter(item => {
+          if (!filterType || filterType === 'all') return true;
+          const t = (item.type || '').toLowerCase();
+          const filter = filterType.toLowerCase();
+          if (filter === 'hen') {
+            return t === 'hen' || t === 'live_bird' || t === 'chicken' || t === 'bird';
+          }
+          if (filter === 'egg') {
+            return t === 'egg' || t === 'eggs';
+          }
+          if (filter === 'duck') {
+            return t === 'duck' || t === 'ducks';
+          }
+          if (filter === 'goat') {
+            return t === 'goat' || t === 'goats';
+          }
+          if (filter === 'fish') {
+            return t === 'fish' || t === 'fishes';
+          }
+          return t === filter;
+        }).map((item) => {
           const getImageForType = (type: string) => {
             const t = (type || '').toLowerCase();
             switch(t) {
-              case 'duck': return 'https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&q=60&w=400'; 
+              case 'duck': return 'https://images.unsplash.com/photo-1570481662006-a3a13746fe9f?auto=format&fit=crop&q=60&w=400'; 
               case 'egg':
               case 'eggs': return 'https://images.unsplash.com/photo-1587486913049-53fc88980cfc?auto=format&fit=crop&q=60&w=400';
               case 'hen':
               case 'chicken':
               case 'live_bird': return 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&q=60&w=400';
               case 'goat': return 'https://images.unsplash.com/photo-1524024973431-2ad916746881?auto=format&fit=crop&q=60&w=400';
+              case 'fish': return 'https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?auto=format&fit=crop&q=60&w=400';
               case 'feed': return 'https://images.unsplash.com/photo-1516466723877-e4ec1d736c8a?auto=format&fit=crop&q=60&w=400';
               case 'dressed_chicken': 
               case 'meat': return 'https://images.unsplash.com/photo-1541832676-9b763b0239ab?auto=format&fit=crop&q=60&w=400';

@@ -134,6 +134,20 @@
       },
       "required": ["name", "phone", "subject", "message"]
     },
+    "ContactInquiry": {
+      "title": "ContactInquiry",
+      "description": "Form inquiries",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "subject": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string", "enum": ["new", "contacted", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "phoneNumber", "subject", "message"]
+    },
     "FarmLog": {
       "title": "FarmLog",
       "description": "Detailed logs for poultry farm activities",
@@ -207,6 +221,7 @@
     "/activity_logs/{logId}": { "schema": "ActivityLog", "description": "System activity logs" },
     "/notifications/{notifId}": { "schema": "Notification", "description": "User notifications" },
     "/inquiries/{inquiryId}": { "schema": "Inquiry", "description": "Lead inquiries" },
+    "/contactInquiries/{inquiryId}": { "schema": "ContactInquiry", "description": "Form inquiries" },
     "/otp_verification/{email}": { "schema": "EmailOtp", "description": "Email verification OTPs" }
   }
 }

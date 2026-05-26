@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { Bird, ShieldCheck, BarChart3, Smartphone, ArrowRight, Globe, Zap, CheckCircle2, MessageSquare, Send, Phone, Mail, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Bird, ShieldCheck, BarChart3, Smartphone, ArrowRight, Globe, Zap, CheckCircle2, MessageSquare, Send, Phone, Mail, User, ChevronDown, Menu, X, HelpCircle, Activity, Award } from 'lucide-react';
 import { Button } from './ui/button';
 import { useTranslation } from 'react-i18next';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -10,6 +10,89 @@ interface LandingPageProps {
   onLogin: () => void;
   onPlanSelect: (plan: { name: string, price: number }) => void;
 }
+
+const industriesList = [
+  {
+    id: 'chicken-poultry',
+    name: 'Hen & Chicken Shop',
+    tag: 'Retail & POS Billing',
+    desc: 'Empower retail operations with robust POS capabilities, average weight logic, batch-level selection, and GST invoices.',
+    benefits: ['Average weight computation', 'Real-time stock deduction', 'Support for direct WhatsApp PDF bills', 'One-click discounts and offers'],
+    detailedImage: 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'poultry-farming',
+    name: 'Poultry Farming',
+    tag: 'Batch & FCR Management',
+    desc: 'Oversight for complex flock life cycles, feed conversion ratios (FCR), water intakes, vaccination schedules, and daily logs.',
+    benefits: ['Automated FCR & Weight Tracking', 'Mortality prediction logs', 'Vaccine alert calendars', 'AI Feed recommendations'],
+    detailedImage: 'https://images.unsplash.com/photo-1516467508483-a7212febe31a?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'goat-farming',
+    name: 'Goat Farming',
+    tag: 'Breeding & Health Log',
+    desc: 'Register goats by breed, track pregnancies, schedule veterinarian sessions, monitor feed, and document trading transactions.',
+    benefits: ['Detailed individual goat file', 'Pregnancy duration tracking', 'Vaccine and medical tables', 'Weight gain analytics'],
+    detailedImage: 'https://images.unsplash.com/photo-1524024973431-2ad916746881?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'egg-shop',
+    name: 'Egg Shop & Distribution',
+    tag: 'Grading & Inventory tracking',
+    desc: 'Complete egg yield registers, sorting by sizes, damage summaries, and wholesale distribution billing.',
+    benefits: ['Daily collection reports', 'Crates and individual counting', 'Cracked egg loss monitoring', 'Wholesale agent pricing catalogs'],
+    detailedImage: 'https://images.unsplash.com/photo-1587486913049-53fc88980cfc?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'duck-farming',
+    name: 'Duck Farming',
+    tag: 'Waterfowl flock managers',
+    desc: 'Track flock health, custom feed plans, temperature checks, and egg yield rates specifically optimized for ducks.',
+    benefits: ['Water log tracking', 'Mortality analytics', 'Feed utilization charts', 'Yield forecasting'],
+    detailedImage: 'https://images.unsplash.com/photo-1570481662006-a3a13746fe9f?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'fish-farming',
+    name: 'Fish Farming',
+    tag: 'Pond & Water Parameters',
+    desc: 'Monitor oxygen levels, pH concentrations, feeding timetables, growth predictions, and overall pond biology parameters.',
+    benefits: ['Dissolved Oxygen checklist', 'Growth forecasting dashboards', 'Pond-wise feeding charts', 'Harvest weight charts'],
+    detailedImage: 'https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'hatchery',
+    name: 'Hatchery Management',
+    tag: 'Incubators & Brood Stocks',
+    desc: 'Supervise incubators settings, setting and hatching dates, chick grades, and shipments routing to farms.',
+    benefits: ['Incubator batch calendar', 'Success-rate analytics', 'Chicks grade sorting logs', 'Customer dispatch system'],
+    detailedImage: 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'feed-medicine',
+    name: 'Feed & Medicine Management',
+    tag: 'Inventory and Stock Alerts',
+    desc: 'Warehouse tracking with auto low-stock warnings, purchase patterns, supplier relationships, and safety margins.',
+    benefits: ['Auto low-stock notifications', 'Purchase ledger accounts', 'Expiration date trackers', 'Supplier outstanding log'],
+    detailedImage: 'https://images.unsplash.com/photo-1516466723877-e4ec1d736c8a?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'animal-trading',
+    name: 'Wholesale & Retail Trading',
+    tag: 'B2B/B2C Animal Dealer',
+    desc: 'Handle large-scale live-poultry or live-stock trades with high-capacity weight averages, custom load calculations, and broker accounting.',
+    benefits: ['Custom wholesale rate matrix', 'Weight deduction accounts', 'Broker margin management', 'Fast billing systems'],
+    detailedImage: 'https://images.unsplash.com/photo-1524024973431-2ad916746881?auto=format&fit=crop&q=80&w=800'
+  },
+  {
+    id: 'multi-branch',
+    name: 'Multi-Branch Operations',
+    tag: 'Franchise & Multi-Farm SaaS',
+    desc: 'Unify multiple locations, branches, shops and warehouses into a single tenant database, securing admin-only insight graphs.',
+    benefits: ['Role performance logs', 'Branch transfers tracker', 'Aggregated revenue reports', 'Unified security auditing'],
+    detailedImage: 'https://images.unsplash.com/photo-1586769852044-692d6e67638d?auto=format&fit=crop&q=80&w=800'
+  }
+];
 
 export const HenIcon = ({ size = 24, className = "" }: { size?: number, className?: string }) => (
   <svg 
@@ -37,24 +120,98 @@ export const HenIcon = ({ size = 24, className = "" }: { size?: number, classNam
 export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps) {
   const { t } = useTranslation();
 
-  const [inquiry, setInquiry] = useState({ name: '', phone: '', subject: '', message: '' });
+  const [formData, setFormData] = useState({
+    fullName: '',
+    phoneNumber: '',
+    subject: '',
+    message: ''
+  });
   const [submittingInquiry, setSubmittingInquiry] = useState(false);
   const [inquirySent, setInquirySent] = useState(false);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [activeSection, setActiveSection] = useState('home');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [industriesDropdownOpen, setIndustriesDropdownOpen] = useState(false);
+  const [selectedIndustry, setSelectedIndustry] = useState<any>(null);
 
-  const handleInquirySubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = ['home', 'explore', 'features', 'industries', 'pricing', 'contact'];
+      const scrollPosition = window.scrollY + 120; // offset for sticky navbar
+
+      for (const section of sections) {
+        const el = document.getElementById(section);
+        if (el) {
+          const top = el.offsetTop;
+          const height = el.offsetHeight;
+          if (scrollPosition >= top && scrollPosition < top + height) {
+            setActiveSection(section);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmittingInquiry(true);
+    setToastMessage(null);
+    console.log("Submitting inquiry to contactInquiries collection:", formData);
+
     try {
-      await addDoc(collection(db, 'inquiries'), {
-        ...inquiry,
-        createdAt: serverTimestamp(),
-        status: 'new'
-      });
+      await addDoc(
+        collection(db, "contactInquiries"),
+        {
+          fullName: formData.fullName,
+          phoneNumber: formData.phoneNumber,
+          subject: formData.subject,
+          message: formData.message,
+          status: "new",
+          createdAt: serverTimestamp(),
+        }
+      );
+
+      console.log("Inquiry submitted successfully!");
       setInquirySent(true);
-      setInquiry({ name: '', phone: '', subject: '', message: '' });
-      setTimeout(() => setInquirySent(false), 5000);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'inquiries');
+      setToastMessage({ type: 'success', text: 'Inquiry Submitted Successfully' });
+      alert("Inquiry Submitted Successfully");
+
+      setFormData({
+        fullName: "",
+        phoneNumber: "",
+        subject: "",
+        message: "",
+      });
+
+      setTimeout(() => {
+        setToastMessage(null);
+      }, 5000);
+
+    } catch (error: any) {
+      console.error(
+        "Firestore Error:",
+        error
+      );
+      setToastMessage({ type: 'error', text: error?.message || 'Failed to submit inquiry' });
+      alert(error.message);
     } finally {
       setSubmittingInquiry(false);
     }
@@ -93,9 +250,249 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
   ];
 
   return (
-    <div className="relative overflow-hidden">
+    <div className="relative overflow-hidden pt-20">
+      {/* Sticky Header */}
+      <header className="fixed top-0 left-0 right-0 h-20 bg-white/95 backdrop-blur-md border-b border-stone-200/60 z-40 transition-all shadow-xs">
+        <div className="max-w-7xl mx-auto h-full px-6 flex items-center justify-between">
+          {/* Logo */}
+          <div className="flex items-center gap-2 cursor-pointer group" onClick={() => scrollToSection('home')}>
+            <div className="w-10 h-10 bg-orange-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-orange-100 transition-transform group-hover:scale-105">
+              <HenIcon size={24} />
+            </div>
+            <span className="font-extrabold text-xl tracking-tight text-stone-900 group-hover:text-orange-600 transition-colors">ChickMart</span>
+          </div>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden lg:flex items-center gap-8">
+            <button
+              onClick={() => scrollToSection('home')}
+              className={`font-sans font-extrabold transition-all text-sm py-2 relative uppercase tracking-wider ${
+                activeSection === 'home' || activeSection === '' 
+                  ? 'text-stone-950 font-black border-b-4 border-orange-600' 
+                  : 'text-stone-500 hover:text-stone-900'
+              }`}
+            >
+              Home
+            </button>
+            <button
+              onClick={() => scrollToSection('explore')}
+              className={`font-sans font-extrabold transition-all text-sm py-2 relative uppercase tracking-wider ${
+                activeSection === 'explore' 
+                  ? 'text-stone-950 font-black border-b-4 border-orange-600' 
+                  : 'text-stone-500 hover:text-stone-900'
+              }`}
+            >
+              Explore
+            </button>
+            <button
+              onClick={() => scrollToSection('features')}
+              className={`font-sans font-extrabold transition-all text-sm py-2 relative uppercase tracking-wider ${
+                activeSection === 'features' 
+                  ? 'text-stone-950 font-black border-b-4 border-orange-600' 
+                  : 'text-stone-500 hover:text-stone-900'
+              }`}
+            >
+              Features
+            </button>
+
+            {/* Industries Dropdown Trigger */}
+            <div 
+              className="relative"
+              onMouseEnter={() => setIndustriesDropdownOpen(true)}
+              onMouseLeave={() => setIndustriesDropdownOpen(false)}
+            >
+              <button
+                onClick={() => scrollToSection('industries')}
+                className={`flex items-center gap-1 font-sans font-extrabold transition-all text-sm py-2 uppercase tracking-wider ${
+                  activeSection === 'industries' 
+                    ? 'text-stone-950 font-black border-b-4 border-orange-600' 
+                    : 'text-stone-500 hover:text-stone-900'
+                }`}
+              >
+                Industries
+                <ChevronDown size={14} className={`transition-transform duration-300 ${industriesDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Mega Dropdown Menu */}
+              <AnimatePresence>
+                {industriesDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute top-full -left-20 w-80 bg-white shadow-xl rounded-2xl p-4 border border-stone-200 grid grid-cols-1 gap-1 z-50 mt-1"
+                  >
+                    <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-orange-600 border-b border-stone-100 mb-2">
+                      Sectors & Farm Operations
+                    </div>
+                    {industriesList.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setSelectedIndustry(item);
+                          setIndustriesDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl hover:bg-orange-50 text-stone-800 text-sm font-bold transition-colors flex flex-col gap-0.5"
+                      >
+                        <span className="text-stone-900 font-extrabold">{item.name}</span>
+                        <span className="text-[10px] text-stone-400 font-medium font-mono">{item.tag}</span>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <button
+              onClick={() => scrollToSection('pricing')}
+              className={`font-sans font-extrabold transition-all text-sm py-2 relative uppercase tracking-wider ${
+                activeSection === 'pricing' 
+                  ? 'text-stone-950 font-black border-b-4 border-orange-600' 
+                  : 'text-stone-500 hover:text-stone-900'
+              }`}
+            >
+              Pricing
+            </button>
+            <button
+              onClick={() => scrollToSection('contact')}
+              className={`font-sans font-extrabold transition-all text-sm py-2 relative uppercase tracking-wider ${
+                activeSection === 'contact' 
+                  ? 'text-stone-950 font-black border-b-4 border-orange-600' 
+                  : 'text-stone-500 hover:text-stone-900'
+              }`}
+            >
+              Contact
+            </button>
+          </nav>
+
+          {/* Right Action */}
+          <div className="hidden lg:flex items-center gap-6">
+            <button
+              onClick={onLogin}
+              className="font-sans font-extrabold text-[#111827] hover:text-orange-600 transition-colors uppercase tracking-wider text-sm p-2"
+            >
+              Login
+            </button>
+            <Button
+              onClick={onLogin}
+              className="bg-orange-600 hover:bg-orange-700 text-white font-extrabold px-6 py-2.5 rounded-full text-sm shadow-md shadow-orange-100 uppercase tracking-widest transition-transform hover:scale-105"
+            >
+              Get Started
+            </Button>
+          </div>
+
+          {/* Mobile Menu Button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="lg:hidden p-2 rounded-xl text-stone-700 bg-stone-100 hover:bg-stone-200 transition-colors"
+          >
+            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
+
+        {/* Mobile Navigation Drawer */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="lg:hidden border-b border-stone-200 bg-white"
+            >
+              <div className="px-6 py-4 flex flex-col gap-4 font-bold text-stone-800">
+                <button
+                  onClick={() => {
+                    scrollToSection('home');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left py-2 hover:text-orange-600"
+                >
+                  Home
+                </button>
+                <button
+                  onClick={() => {
+                    scrollToSection('explore');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left py-2 hover:text-orange-600"
+                >
+                  Explore
+                </button>
+                <button
+                  onClick={() => {
+                    scrollToSection('features');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left py-2 hover:text-orange-600"
+                >
+                  Features
+                </button>
+
+                {/* Mobile Industries List */}
+                <div className="border-t border-b border-stone-100 py-2">
+                  <span className="text-xs text-stone-400 uppercase tracking-wider mb-2 block font-extrabold">Industries</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {industriesList.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setSelectedIndustry(item);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="text-left py-1 hover:text-orange-600 text-sm font-bold block truncate"
+                      >
+                        {item.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    scrollToSection('pricing');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left py-2 hover:text-orange-600"
+                >
+                  Pricing
+                </button>
+                <button
+                  onClick={() => {
+                    scrollToSection('contact');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left py-2 hover:text-orange-600"
+                >
+                  Contact
+                </button>
+                <div className="flex gap-4 pt-2 border-t border-stone-100">
+                  <button
+                    onClick={() => {
+                      onLogin();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex-1 py-3 text-center border border-stone-200 rounded-xl hover:bg-stone-50"
+                  >
+                    Login
+                  </button>
+                  <Button
+                    onClick={() => {
+                      onLogin();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex-1 py-3 text-center bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold"
+                  >
+                    Get Started
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </header>
+
       {/* Hero Section */}
-      <section className="relative pt-20 pb-32 md:pt-32 md:pb-48 px-6">
+      <section id="home" className="relative pt-16 pb-32 md:pt-24 md:pb-48 px-6">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full -z-10">
           <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-100 rounded-full blur-3xl opacity-50 animate-pulse" />
           <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-stone-200 rounded-full blur-3xl opacity-50" />
@@ -156,7 +553,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
       </section>
 
       {/* Features Grid */}
-      <section className="py-24 bg-stone-900 text-white px-6">
+      <section id="features" className="py-24 bg-stone-900 text-white px-6">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
             {[
@@ -196,7 +593,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
       </section>
 
       {/* Trust Section */}
-      <section className="py-24 px-6">
+      <section id="industries" className="py-24 px-6">
         <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-16 items-center">
           <div>
             <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-8 leading-tight">
@@ -235,7 +632,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
       </section>
 
       {/* Advanced Features Section */}
-      <section className="py-24 bg-white px-6">
+      <section id="explore" className="py-24 bg-white px-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-end mb-16 gap-8">
             <div className="max-w-2xl">
@@ -285,7 +682,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
       </section>
 
       {/* Pricing Section */}
-      <section className="py-24 px-6 bg-stone-50">
+      <section id="pricing" className="py-24 px-6 bg-stone-50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-4">Simple, Transparent Pricing</h2>
@@ -358,7 +755,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
       </section>
 
       {/* Inquiry Form Section */}
-      <section className="py-24 px-6 bg-white">
+      <section id="contact" className="py-24 px-6 bg-white">
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-2 gap-16 items-start">
             <div>
@@ -424,7 +821,30 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                   </Button>
                 </div>
               ) : (
-                <form onSubmit={handleInquirySubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {toastMessage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      className={`p-4 rounded-xl text-xs font-bold leading-relaxed flex items-center gap-3 border ${
+                        toastMessage.type === 'success'
+                          ? 'bg-green-50 border-green-200 text-green-800'
+                          : 'bg-red-50 border-red-200 text-red-800'
+                      }`}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${toastMessage.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className="flex-1">{toastMessage.text}</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setToastMessage(null)} 
+                        className="text-stone-400 hover:text-stone-700 font-black cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    </motion.div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-stone-500 ml-1">Full Name</label>
@@ -432,8 +852,10 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                         <User className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300" size={18} />
                         <input 
                           required
-                          value={inquiry.name}
-                          onChange={e => setInquiry({...inquiry, name: e.target.value})}
+                          type="text"
+                          name="fullName"
+                          value={formData.fullName}
+                          onChange={handleChange}
                           placeholder="John Doe"
                           className="w-full h-14 pl-12 pr-4 rounded-2xl border border-stone-200 bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-50 transition-all outline-none font-medium"
                         />
@@ -445,9 +867,10 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300" size={18} />
                         <input 
                           required
-                          type="tel"
-                          value={inquiry.phone}
-                          onChange={e => setInquiry({...inquiry, phone: e.target.value})}
+                          type="text"
+                          name="phoneNumber"
+                          value={formData.phoneNumber}
+                          onChange={handleChange}
                           placeholder="+91 0000000000"
                           className="w-full h-14 pl-12 pr-4 rounded-2xl border border-stone-200 bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-50 transition-all outline-none font-medium"
                         />
@@ -458,8 +881,10 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                     <label className="text-sm font-bold text-stone-500 ml-1">Subject</label>
                     <input 
                       required
-                      value={inquiry.subject}
-                      onChange={e => setInquiry({...inquiry, subject: e.target.value})}
+                      type="text"
+                      name="subject"
+                      value={formData.subject}
+                      onChange={handleChange}
                       placeholder="Pricing Query / Software Demo"
                       className="w-full h-14 px-5 rounded-2xl border border-stone-200 bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-50 transition-all outline-none font-medium"
                     />
@@ -468,19 +893,33 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                     <label className="text-sm font-bold text-stone-500 ml-1">Your Message</label>
                     <textarea 
                       required
-                      value={inquiry.message}
-                      onChange={e => setInquiry({...inquiry, message: e.target.value})}
+                      name="message"
+                      value={formData.message}
+                      onChange={handleChange}
                       rows={4}
                       placeholder="How can we help you?"
                       className="w-full p-5 rounded-2xl border border-stone-200 bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-50 transition-all outline-none font-medium resize-none"
                     />
                   </div>
                   <Button 
+                    type="submit"
                     disabled={submittingInquiry}
                     className="w-full h-14 rounded-2xl bg-orange-600 text-white font-bold hover:bg-orange-700 shadow-lg shadow-orange-100 flex items-center justify-center gap-2"
                   >
-                    {submittingInquiry ? 'Sending...' : 'Submit Inquiry'}
-                    <Send size={18} />
+                    {submittingInquiry ? (
+                      <span className="flex items-center gap-2">
+                        <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span>Sending...</span>
+                      </span>
+                    ) : (
+                      <>
+                        Submit Inquiry
+                        <Send size={18} />
+                      </>
+                    )}
                   </Button>
                 </form>
               )}
@@ -488,6 +927,68 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
           </div>
         </div>
       </section>
+
+      {/* Industry Details Modal */}
+      <AnimatePresence>
+        {selectedIndustry && (
+          <div className="fixed inset-0 bg-stone-950/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[2.5rem] border border-stone-200 max-w-2xl w-full p-8 md:p-10 shadow-2xl relative overflow-hidden"
+            >
+              <button 
+                onClick={() => setSelectedIndustry(null)}
+                className="absolute top-6 right-6 w-10 h-10 bg-stone-50 border border-stone-200 rounded-full flex items-center justify-center text-stone-500 hover:text-stone-950 hover:bg-stone-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="flex items-center gap-3 mb-6">
+                <span className="px-4 py-1.5 rounded-full bg-orange-50 text-orange-600 text-xs font-mono font-black uppercase tracking-widest">
+                  {selectedIndustry.tag}
+                </span>
+              </div>
+
+              <h3 className="text-3xl md:text-4xl font-black text-stone-900 mb-4">{selectedIndustry.name}</h3>
+              <p className="text-stone-500 text-base md:text-lg leading-relaxed mb-6">
+                {selectedIndustry.desc}
+              </p>
+
+              <h4 className="font-extrabold text-sm text-stone-400 uppercase tracking-widest mb-4">Core Operational Modules</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                {selectedIndustry.benefits.map((benefit: string, idx: number) => (
+                  <div key={idx} className="flex items-center gap-3 bg-stone-50 border border-stone-100 p-3 rounded-2xl">
+                    <CheckCircle2 size={18} className="text-orange-600 flex-shrink-0" />
+                    <span className="text-sm font-bold text-stone-800">{benefit}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-4">
+                <Button 
+                  onClick={() => {
+                    setSelectedIndustry(null);
+                    onLogin();
+                  }}
+                  className="flex-1 h-14 bg-orange-600 hover:bg-orange-700 text-white font-black rounded-2xl shadow-lg shadow-orange-100 gap-2 text-base uppercase tracking-widest"
+                >
+                  Access Platform Beta
+                  <ArrowRight size={18} />
+                </Button>
+                <Button 
+                  onClick={() => setSelectedIndustry(null)}
+                  variant="outline"
+                  className="h-14 px-8 border-stone-200 rounded-2xl font-bold hover:bg-stone-50"
+                >
+                  Close
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <footer className="py-12 border-t border-stone-100 px-6">

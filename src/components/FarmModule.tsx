@@ -175,7 +175,7 @@ export default function FarmModule({ action, onActionComplete, profile }: {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(false);
 
-  const isTrial = profile?.subscriptionType === 'trial';
+  const isTrial = false;
   const hasMultipleBatches = batches.length >= 1;
 
   const submitLog = async () => {
@@ -247,7 +247,6 @@ export default function FarmModule({ action, onActionComplete, profile }: {
           <Dialog open={isAddBatchOpen} onOpenChange={setIsAddBatchOpen}>
             <DialogTrigger render={
               <Button 
-                disabled={isTrial && (batches.length >= 1)}
                 className="rounded-xl bg-orange-600 hover:bg-orange-700 text-white gap-2 font-bold shadow-lg shadow-orange-100"
               >
                 <Plus size={18} />

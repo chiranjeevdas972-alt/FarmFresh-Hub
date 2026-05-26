@@ -51,6 +51,7 @@ const HenIcon = ({ size = 24, className = "" }: { size?: number, className?: str
 
 export default function Dashboard({ user, profile, onLogout, onUpgrade }: DashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [inventoryFilter, setInventoryFilter] = useState<string>('all');
   const [moduleAction, setModuleAction] = useState<string | null>(null);
   const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -127,6 +128,9 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
   const handleTabChange = (id: string) => {
     setActiveTab(id);
     setIsSidebarOpen(false);
+    if (id === 'inventory') {
+      setInventoryFilter('all');
+    }
   };
 
   return (
@@ -330,19 +334,28 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
                   </div>
                   <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
                     {[
+                      { name: 'Hen', id: 'hen', type: 'hen' },
                       { name: 'Duck', id: 'duck', type: 'duck' },
-                      { name: 'Egg', id: 'egg', type: 'egg' }
+                      { name: 'Egg', id: 'egg', type: 'egg' },
+                      { name: 'Goat', id: 'goat', type: 'goat' },
+                      { name: 'Fish', id: 'fish', type: 'fish' }
                     ].map((item) => {
                       const getImage = (type: string) => {
-                        if (type === 'duck') return 'https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&q=60&w=200';
+                        if (type === 'hen') return 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&q=60&w=200';
+                        if (type === 'duck') return 'https://images.unsplash.com/photo-1570481662006-a3a13746fe9f?auto=format&fit=crop&q=60&w=200';
                         if (type === 'egg') return 'https://images.unsplash.com/photo-1587486913049-53fc88980cfc?auto=format&fit=crop&q=60&w=200';
+                        if (type === 'goat') return 'https://images.unsplash.com/photo-1524024973431-2ad916746881?auto=format&fit=crop&q=60&w=200';
+                        if (type === 'fish') return 'https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?auto=format&fit=crop&q=60&w=200';
                         return '';
                       };
                       return (
                         <div 
                           key={item.id} 
                           className="min-w-[140px] sm:min-w-[180px] bg-white p-2 rounded-3xl border border-stone-200 shadow-xs snap-start hover:border-orange-200 transition-colors cursor-pointer group"
-                          onClick={() => setActiveTab('inventory')}
+                          onClick={() => {
+                            setInventoryFilter(item.type);
+                            setActiveTab('inventory');
+                          }}
                         >
                           <div className="h-24 sm:h-32 w-full rounded-2xl overflow-hidden mb-3 relative">
                             <img 
@@ -365,7 +378,7 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
           <div className="w-full">
             {activeTab === 'farm' && <FarmModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
             {activeTab === 'shop' && <ShopModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
-            {activeTab === 'inventory' && <InventoryModule profile={profile} />}
+            {activeTab === 'inventory' && <InventoryModule profile={profile} initialFilter={inventoryFilter} />}
             {activeTab === 'accounts' && <AccountsModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
             {activeTab === 'customers' && <CustomerModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
             {activeTab === 'delivery' && <DeliveryModule profile={profile} />}

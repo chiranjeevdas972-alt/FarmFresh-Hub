@@ -141,31 +141,62 @@ export default function AnalyticsModule({ onNavigate, action, onActionComplete, 
             <AlertTriangle size={14} className="group-hover:text-orange-500 transition-colors" />
           </CardTitle>
         </CardHeader>
-        <CardContent className="h-[300px] pt-4 flex items-center justify-center">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={expenseData}
-                cx="50%"
-                cy="50%"
-                innerRadius={70}
-                outerRadius={90}
-                paddingAngle={8}
-                dataKey="value"
-                stroke="none"
-              >
-                {expenseData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="absolute inset-x-0 flex flex-col items-center justify-center pointer-events-none mt-4">
-            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-tighter">Total Cost</span>
-            <span className="text-2xl font-black text-stone-900 leading-none mt-1">
-              ₹{expenseData.reduce((sum, e) => sum + e.value, 0).toLocaleString()}
-            </span>
+        <CardContent className="h-[300px] pt-2 flex flex-col sm:flex-row items-center justify-center gap-6 px-6">
+          <div className="relative w-[180px] h-[180px] flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={expenseData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={expenseData.length > 1 ? 6 : 0}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {expenseData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-[10px] font-bold text-stone-400 uppercase tracking-tighter">Total Cost</span>
+              <span className="text-xl font-black text-stone-900 leading-none mt-1">
+                ₹{expenseData.reduce((sum, e) => sum + e.value, 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex-1 min-w-0 w-full">
+            <div className="max-h-[180px] overflow-y-auto pr-1 space-y-2.5">
+              {expenseData.map((exp, idx) => {
+                const total = expenseData.reduce((sum, e) => sum + e.value, 0) || 1;
+                const pct = ((exp.value / total) * 100).toFixed(0);
+                return (
+                  <div key={idx} className="flex items-center justify-between text-xs transition-transform hover:translate-x-1 duration-155">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div 
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: COLORS[idx % COLORS.length] }} 
+                      />
+                      <span className="font-extrabold text-stone-700 truncate">{exp.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 font-mono text-stone-500 font-bold ml-2">
+                      <span>₹{exp.value.toLocaleString()}</span>
+                      <span className="text-[10px] text-stone-400">({pct}%)</span>
+                    </div>
+                  </div>
+                );
+              })}
+              {expenseData.length === 0 && (
+                <div className="text-center py-10 text-stone-400 text-xs italic">
+                  No expense records found.
+                </div>
+              )}
+            </div>
           </div>
         </CardContent>
       </Card>

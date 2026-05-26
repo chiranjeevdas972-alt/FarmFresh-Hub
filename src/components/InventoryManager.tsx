@@ -131,7 +131,7 @@ export default function InventoryManager({ profile }: { profile: any }) {
               const getImageForType = (type: string) => {
                 const t = (type || '').toLowerCase();
                 switch(t) {
-                  case 'duck': return 'https://images.unsplash.com/photo-1530122037265-a5f1f91d3b99?auto=format&fit=crop&q=60&w=100';
+                  case 'duck': return 'https://images.unsplash.com/photo-1570481662006-a3a13746fe9f?auto=format&fit=crop&q=60&w=100';
                   case 'egg': 
                   case 'eggs': return 'https://images.unsplash.com/photo-1587486913049-53fc88980cfc?auto=format&fit=crop&q=60&w=100';
                   case 'hen':
@@ -139,6 +139,7 @@ export default function InventoryManager({ profile }: { profile: any }) {
                   case 'bird':
                   case 'live_bird': return 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?auto=format&fit=crop&q=60&w=100';
                   case 'goat': return 'https://images.unsplash.com/photo-1524024973431-2ad916746881?auto=format&fit=crop&q=60&w=100';
+                  case 'fish': return 'https://images.unsplash.com/photo-1522069169874-c58ec4b76be5?auto=format&fit=crop&q=60&w=100';
                   case 'feed': return 'https://images.unsplash.com/photo-1516466723877-e4ec1d736c8a?auto=format&fit=crop&q=60&w=100';
                   case 'dressed_chicken': 
                   case 'meat': return 'https://images.unsplash.com/photo-1541832676-9b763b0239ab?auto=format&fit=crop&q=60&w=100';
