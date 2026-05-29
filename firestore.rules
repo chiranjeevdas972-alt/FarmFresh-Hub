@@ -1,39 +1,229 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
-    function isValidInquiry(data) {
-      return data.keys().hasAll(['name', 'phone', 'subject', 'message', 'status', 'createdAt'])
+    // ===============================================================
+    // HELPERS
+    // ===============================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Role check
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == "chiranjeevdas972@gmail.com" && isVerified()) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'user') == 'admin')
+      );
+    }
+
+    function isOwner(data) {
+      return isSignedIn() && (data.get('ownerId', 'unknown') == request.auth.uid || data.get('userId', 'unknown') == request.auth.uid);
+    }
+
+    // ===============================================================
+    // VALIDATION BLUEPRINTS
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'role']) &&
+             data.uid == request.auth.uid &&
+             data.email is string &&
+             data.role in ['admin', 'manager', 'staff', 'user'];
+    }
+
+    function isValidBatch(data) {
+      return data.keys().hasAll(['batchId', 'startDate', 'initialQuantity', 'status', 'ownerId']) &&
+             data.ownerId == request.auth.uid &&
+             data.batchId is string && data.batchId.size() <= 100 &&
+             data.initialQuantity is number &&
+             data.status in ['active', 'completed'];
+    }
+
+    function isValidFarmLog(data) {
+      return data.keys().hasAll(['type', 'ownerId', 'timestamp']) &&
+             data.ownerId == request.auth.uid &&
+             data.type in ['mortality', 'feed', 'vaccine', 'weight', 'cleaning', 'other'] &&
+             data.timestamp is string;
+    }
+
+    function isValidInventory(data) {
+      return data.keys().hasAll(['name', 'type', 'quantity', 'unit', 'ownerId']) &&
+             data.ownerId == request.auth.uid &&
+             data.name is string && data.name.size() <= 100 &&
+             data.quantity is number;
+    }
+
+    function isValidSale(data) {
+      return data.keys().hasAll(['invoiceNo', 'total', 'timestamp', 'ownerId']) &&
+             data.ownerId == request.auth.uid &&
+             data.total is number;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['type', 'ownerId', 'timestamp', 'userId']) &&
+             data.ownerId == request.auth.uid &&
+             data.userId == request.auth.uid;
+    }
+
+    function isValidContactInquiry(data) {
+      return data.keys().hasAll(['fullName', 'phoneNumber', 'subject', 'message', 'status', 'createdAt'])
         && data.keys().size() == 6
-        && data.name is string && data.name.size() > 0 && data.name.size() <= 150
-        && data.phone is string && data.phone.size() > 0 && data.phone.size() <= 30
+        && data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 150
+        && data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() <= 30
         && data.subject is string && data.subject.size() > 0 && data.subject.size() <= 250
         && data.message is string && data.message.size() > 0 && data.message.size() <= 5000
         && data.status in ['new', 'contacted', 'closed']
         && data.createdAt == request.time;
     }
 
-    match /otp_verification/{docId} {
-      allow read, write: if true;
+    function isValidPartnerApplication(data) {
+      return data.keys().hasAll(['fullName', 'emailAddress', 'phoneNumber', 'businessName', 'partnershipType', 'message', 'status', 'createdAt'])
+        && data.keys().size() == 8
+        && data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 150
+        && data.emailAddress is string && data.emailAddress.size() > 0 && data.emailAddress.size() <= 150
+        && data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() <= 30
+        && data.businessName is string && data.businessName.size() > 0 && data.businessName.size() <= 200
+        && data.partnershipType is string && data.partnershipType.size() > 0 && data.partnershipType.size() <= 100
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 5000
+        && data.status is string && data.status.size() <= 50
+        && data.createdAt == request.time;
     }
 
+    function isValidPartnershipApplication(data) {
+      return data.keys().hasAll(['fullName', 'phoneNumber', 'email', 'businessName', 'partnershipInterest', 'message', 'status', 'createdAt'])
+        && data.keys().size() == 8
+        && data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 150
+        && data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() <= 30
+        && data.email is string && data.email.size() > 0 && data.email.size() <= 150
+        && data.businessName is string && data.businessName.size() > 0 && data.businessName.size() <= 200
+        && data.partnershipInterest is string && data.partnershipInterest.size() > 0 && data.partnershipInterest.size() <= 150
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 5000
+        && data.status == 'new'
+        && data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // RULES
+    // ===============================================================
+
     match /users/{userId} {
-      allow read, write: if request.auth != null;
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidUser(incoming());
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin()) && 
+                    !incoming().diff(existing()).affectedKeys().hasAny(['role']) || isAdmin();
+    }
+
+    match /batches/{batchId} {
+      allow get: if isSignedIn() && (isOwner(existing()) || isAdmin()) && isValidId(batchId);
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidBatch(incoming()) && isValidId(batchId);
+      allow update: if isVerified() && (isOwner(existing()) || isAdmin()) && isValidId(batchId) && 
+                    incoming().ownerId == existing().ownerId;
+      allow delete: if isAdmin() && isValidId(batchId);
+    }
+
+    match /farmlogs/{logId} {
+      allow get: if isSignedIn() && (isOwner(existing()) || isAdmin()) && isValidId(logId);
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidFarmLog(incoming()) && isValidId(logId);
+      allow update: if isVerified() && (isOwner(existing()) || isAdmin()) && isValidId(logId) &&
+                    incoming().ownerId == existing().ownerId;
+      allow delete: if isAdmin() && isValidId(logId);
+    }
+
+    match /inventory/{itemId} {
+      allow get: if isSignedIn() && (isOwner(existing()) || isAdmin()) && isValidId(itemId);
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidInventory(incoming()) && isValidId(itemId);
+      allow update: if isVerified() && (isOwner(existing()) || isAdmin()) && isValidId(itemId) &&
+                    incoming().ownerId == existing().ownerId;
+      allow delete: if isAdmin() && isValidId(itemId);
+    }
+
+    match /sales/{saleId} {
+      allow get: if isSignedIn() && (isOwner(existing()) || isAdmin()) && isValidId(saleId);
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidSale(incoming()) && isValidId(saleId);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /expenses/{expenseId} {
+      allow get: if isSignedIn() && (isOwner(existing()) || isAdmin()) && isValidId(expenseId);
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(expenseId);
+      allow update: if isVerified() && (isOwner(existing()) || isAdmin()) && isValidId(expenseId);
+      allow delete: if isAdmin();
+    }
+
+    match /customers/{customerId} {
+      allow get: if isSignedIn() && (isOwner(existing()) || isAdmin()) && isValidId(customerId);
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(customerId);
+      allow update: if isVerified() && (isOwner(existing()) || isAdmin()) && isValidId(customerId);
+      allow delete: if isAdmin();
+    }
+
+    match /activity_logs/{logId} {
+      allow get: if isSignedIn() && (isOwner(existing()) || isAdmin()) && isValidId(logId);
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidActivityLog(incoming()) && isValidId(logId);
+    }
+
+    match /notifications/{notifId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin()) && isValidId(notifId);
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified();
+      allow update: if isVerified() && resource.data.userId == request.auth.uid && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['read']);
     }
 
     match /inquiries/{inquiryId} {
-      allow create: if isValidInquiry(request.resource.data);
-      allow read, update, delete: if request.auth != null;
+      allow create: if true;
+      allow read, write: if isAdmin();
     }
 
     match /contactInquiries/{inquiryId} {
-      allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow create: if isValidContactInquiry(incoming()) && isValidId(inquiryId);
+      allow read, write: if isAdmin();
     }
 
-    // Default catch-all for development if needed, but keeping it secure
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    match /partnerApplications/{applicationId} {
+      allow create: if isValidPartnerApplication(incoming()) && isValidId(applicationId);
+      allow read, write: if isAdmin();
+    }
+
+    match /partnershipApplications/{applicationId} {
+      allow create: if isValidPartnershipApplication(incoming());
+      allow read, write: if isAdmin();
+    }
+
+    match /otp_verification/{docId} {
+      allow read, write: if true;
     }
   }
 }

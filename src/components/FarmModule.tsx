@@ -255,7 +255,7 @@ export default function FarmModule({ action, onActionComplete, profile }: {
             } />
           <DialogContent className="rounded-3xl">
             <DialogHeader>
-              <DialogTitle>Add New Chick Batch</DialogTitle>
+              <DialogTitle>Add New {newBatch.batchId || 'Product'} Batch</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleAddBatch} className="space-y-4 pt-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -289,7 +289,7 @@ export default function FarmModule({ action, onActionComplete, profile }: {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Cost per Chick (₹)</Label>
+                  <Label>Cost per {newBatch.batchId || 'Product'} (₹)</Label>
                   <Input 
                     type="number" 
                     required 

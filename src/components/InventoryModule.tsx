@@ -12,6 +12,13 @@ import { Plus, Package, AlertTriangle, ArrowRightLeft, Warehouse, Trash2, Histor
 import { notificationService } from '../services/notificationService';
 import { format } from 'date-fns';
 
+const SUB_TYPES: Record<string, string[]> = {
+  hen: ['Broiler (ब्रॉयलर)', 'Layer (लेयर)', 'Kadaknath (कड़कनाथ)', 'Sonali (सोनाली)', 'Desi / Country Chicken (देसी)'],
+  goat: ['Sirohi (सिरोही)', 'Jamnapari (जमुनापारी)', 'Barbari (बरबरी)', 'Black Bengal (ब्लैक बंगाल)', 'Boer (बोअर)'],
+  fish: ['Rohu (रोहू)', 'Catla (कतला)', 'Tilapia (तिलापिया)', 'Pangasius (पंगासियस)', 'Common Carp (कॉमन कार्प)'],
+  egg: ['White Eggs (सफेद अंडे)', 'Brown Eggs (भूरे अंडे)', 'Desi Eggs (देसी अंडे)', 'Hatching Eggs (प्रजूनन अंडे)']
+};
+
 export default function InventoryModule({ profile, initialFilter = 'all' }: { profile?: any, initialFilter?: string }) {
   const [items, setItems] = useState<any[]>([]);
   const [filterType, setFilterType] = useState<string>(initialFilter);
@@ -23,7 +30,8 @@ export default function InventoryModule({ profile, initialFilter = 'all' }: { pr
     price: 0,
     unit: 'pcs',
     lowStockThreshold: 10,
-    locationType: 'farm'
+    locationType: 'farm',
+    subType: ''
   });
 
   useEffect(() => {
@@ -76,7 +84,8 @@ export default function InventoryModule({ profile, initialFilter = 'all' }: { pr
         price: 0,
         unit: 'pcs',
         lowStockThreshold: 10,
-        locationType: 'farm'
+        locationType: 'farm',
+        subType: ''
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'inventory');
@@ -176,16 +185,22 @@ export default function InventoryModule({ profile, initialFilter = 'all' }: { pr
                     <select 
                       className="w-full h-10 rounded-xl border border-stone-200 bg-white px-3 text-sm"
                       value={newItem.type}
-                      onChange={e => setNewItem({...newItem, type: e.target.value})}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const defaultSub = SUB_TYPES[val] ? SUB_TYPES[val][0] : '';
+                        setNewItem({...newItem, type: val, subType: defaultSub});
+                      }}
                     >
                       <option value="live_bird">Live Bird</option>
                       <option value="hen">Hen</option>
                       <option value="duck">Duck</option>
                       <option value="goat">Goat</option>
+                      <option value="fish">Fish</option>
                       <option value="dressed_chicken">Dressed Chicken</option>
                       <option value="egg">Egg</option>
                       <option value="feed">Feed</option>
                       <option value="medicine">Medicine</option>
+                      <option value="other">Other</option>
                     </select>
                   </div>
                   <div className="space-y-2">
@@ -201,6 +216,20 @@ export default function InventoryModule({ profile, initialFilter = 'all' }: { pr
                     </select>
                   </div>
                 </div>
+                {SUB_TYPES[newItem.type] && (
+                  <div className="space-y-2">
+                    <Label>Sub-Type / Breed (नस्ल / उप-प्रकार)</Label>
+                    <select 
+                      className="w-full h-10 rounded-xl border border-stone-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      value={newItem.subType}
+                      onChange={e => setNewItem({...newItem, subType: e.target.value})}
+                    >
+                      {SUB_TYPES[newItem.type].map(sub => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Quantity</Label>
@@ -331,7 +360,7 @@ export default function InventoryModule({ profile, initialFilter = 'all' }: { pr
                 <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent opacity-60" />
                 <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center text-white">
                   <Badge className="bg-white/20 backdrop-blur-md text-white border-white/30 rounded-full px-3 py-1 font-bold text-[10px] uppercase tracking-widest">
-                    {item.type.replace('_', ' ')}
+                    {item.type.replace('_', ' ')}{item.subType ? ` (${item.subType})` : ''}
                   </Badge>
                   <div className="flex items-center gap-1.5 bg-black/30 backdrop-blur-md px-2 py-1 rounded-full border border-white/10">
                     <Warehouse size={12} className="text-orange-400" />

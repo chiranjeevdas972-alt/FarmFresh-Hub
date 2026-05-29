@@ -142,9 +142,9 @@ export default function App() {
               createdAt: new Date().toISOString(),
               subscriptionType: isOwner ? 'pro' : 'standard',
               trialStartDate: null,
-              businessName: 'ChickMart',
+              businessName: 'FarmFresh Hub',
               businessAddress: 'Digwadih, Dhanbad, Jharkhand, 828113',
-              businessEmail: firebaseUser.email || 'contact@chickmart.app',
+              businessEmail: firebaseUser.email || 'contact@farmfreshhub.app',
               businessPhone: '8987766981'
             };
             await setDoc(userRef, newProfile);
@@ -254,7 +254,7 @@ export default function App() {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center bg-stone-50 gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-orange-600" />
-        <p className="text-stone-400 font-bold uppercase tracking-widest text-[10px]">Loading ChickMart...</p>
+        <p className="text-stone-400 font-bold uppercase tracking-widest text-[10px]">Loading FarmFresh Hub...</p>
       </div>
     );
   }

@@ -1,6 +1,8 @@
 {
-  "name": "ChickMart",
-  "description": "A comprehensive management system for poultry farms and chicken shops, featuring real-time inventory tracking, sales dashboards, and AI-powered farm insights.",
+  "name": "FarmFresh Hub",
+  "description": "Smart Livestock & Fresh Food Management Platform for Chicken, Fish, Goat, Eggs, Duck, Hen, Meat & Farm Businesses.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

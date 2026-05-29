@@ -148,6 +148,38 @@
       },
       "required": ["fullName", "phoneNumber", "subject", "message"]
     },
+    "PartnerApplication": {
+      "title": "PartnerApplication",
+      "description": "Partnership requests",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "emailAddress": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "businessName": { "type": "string" },
+        "partnershipType": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "emailAddress", "phoneNumber", "businessName", "partnershipType", "message"]
+    },
+    "PartnershipApplication": {
+      "title": "PartnershipApplication",
+      "description": "Partnership requests mapped to partnershipInterest",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "email": { "type": "string" },
+        "businessName": { "type": "string" },
+        "partnershipInterest": { "type": "string" },
+        "message": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fullName", "phoneNumber", "email", "businessName", "partnershipInterest", "message", "status", "createdAt"]
+    },
     "FarmLog": {
       "title": "FarmLog",
       "description": "Detailed logs for poultry farm activities",
@@ -222,6 +254,8 @@
     "/notifications/{notifId}": { "schema": "Notification", "description": "User notifications" },
     "/inquiries/{inquiryId}": { "schema": "Inquiry", "description": "Lead inquiries" },
     "/contactInquiries/{inquiryId}": { "schema": "ContactInquiry", "description": "Form inquiries" },
+    "/partnerApplications/{applicationId}": { "schema": "PartnerApplication", "description": "Partnership requests" },
+    "/partnershipApplications/{applicationId}": { "schema": "PartnershipApplication", "description": "Partnership requests to partnershipInterest" },
     "/otp_verification/{email}": { "schema": "EmailOtp", "description": "Email verification OTPs" }
   }
 }

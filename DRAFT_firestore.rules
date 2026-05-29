@@ -88,6 +88,43 @@ service cloud.firestore {
              data.userId == request.auth.uid;
     }
 
+    function isValidContactInquiry(data) {
+      return data.keys().hasAll(['fullName', 'phoneNumber', 'subject', 'message', 'status', 'createdAt'])
+        && data.keys().size() == 6
+        && data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 150
+        && data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() <= 30
+        && data.subject is string && data.subject.size() > 0 && data.subject.size() <= 250
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 5000
+        && data.status in ['new', 'contacted', 'closed']
+        && data.createdAt == request.time;
+    }
+
+    function isValidPartnerApplication(data) {
+      return data.keys().hasAll(['fullName', 'emailAddress', 'phoneNumber', 'businessName', 'partnershipType', 'message', 'status', 'createdAt'])
+        && data.keys().size() == 8
+        && data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 150
+        && data.emailAddress is string && data.emailAddress.size() > 0 && data.emailAddress.size() <= 150
+        && data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() <= 30
+        && data.businessName is string && data.businessName.size() > 0 && data.businessName.size() <= 200
+        && data.partnershipType is string && data.partnershipType.size() > 0 && data.partnershipType.size() <= 100
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 5000
+        && data.status is string && data.status.size() <= 50
+        && data.createdAt == request.time;
+    }
+
+    function isValidPartnershipApplication(data) {
+      return data.keys().hasAll(['fullName', 'phoneNumber', 'email', 'businessName', 'partnershipInterest', 'message', 'status', 'createdAt'])
+        && data.keys().size() == 8
+        && data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 150
+        && data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() <= 30
+        && data.email is string && data.email.size() > 0 && data.email.size() <= 150
+        && data.businessName is string && data.businessName.size() > 0 && data.businessName.size() <= 200
+        && data.partnershipInterest is string && data.partnershipInterest.size() > 0 && data.partnershipInterest.size() <= 150
+        && data.message is string && data.message.size() > 0 && data.message.size() <= 5000
+        && data.status == 'new'
+        && data.createdAt is timestamp;
+    }
+
     // ===============================================================
     // RULES
     // ===============================================================
@@ -138,7 +175,7 @@ service cloud.firestore {
     match /expenses/{expenseId} {
       allow get: if isSignedIn() && (isOwner(existing()) || isAdmin()) && isValidId(expenseId);
       allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
-      allow create: if isVerified() && isValidId(expenseId); // Simplified for now
+      allow create: if isVerified() && isValidId(expenseId);
       allow update: if isVerified() && (isOwner(existing()) || isAdmin()) && isValidId(expenseId);
       allow delete: if isAdmin();
     }
@@ -168,6 +205,25 @@ service cloud.firestore {
     match /inquiries/{inquiryId} {
       allow create: if true;
       allow read, write: if isAdmin();
+    }
+
+    match /contactInquiries/{inquiryId} {
+      allow create: if isValidContactInquiry(incoming()) && isValidId(inquiryId);
+      allow read, write: if isAdmin();
+    }
+
+    match /partnerApplications/{applicationId} {
+      allow create: if isValidPartnerApplication(incoming()) && isValidId(applicationId);
+      allow read, write: if isAdmin();
+    }
+
+    match /partnershipApplications/{applicationId} {
+      allow create: if isValidPartnershipApplication(incoming());
+      allow read, write: if isAdmin();
+    }
+
+    match /otp_verification/{docId} {
+      allow read, write: if true;
     }
   }
 }

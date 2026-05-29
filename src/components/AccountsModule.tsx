@@ -262,9 +262,10 @@ export default function AccountsModule({ action, onActionComplete, profile }: { 
                     onChange={e => setNewExpense({...newExpense, category: e.target.value})}
                   >
                     <option>Feed</option>
-                    <option>Medicine</option>
-                    <option>Electricity</option>
-                    <option>Labor</option>
+                    <option>Medicine / Vaccine</option>
+                    <option>Labor / Wages</option>
+                    <option>Farm Repairs</option>
+                    <option>Electricity / Utility</option>
                     <option>Transport</option>
                     <option>Other</option>
                   </select>
