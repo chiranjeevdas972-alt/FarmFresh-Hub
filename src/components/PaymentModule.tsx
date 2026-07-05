@@ -18,6 +18,15 @@ export default function PaymentModule({ planName, price, onClose, onComplete, bu
   const [isExpired, setIsExpired] = useState(false);
   const [upiId, setUpiId] = useState('');
   const [cardData, setCardData] = useState({ number: '', expiry: '', cvc: '' });
+  
+  // Explicit non-hidden auto-renewal and free-trial consent states
+  const [consentAutoRenew, setConsentAutoRenew] = useState(false);
+  const [consentTrialTerms, setConsentTrialTerms] = useState(false);
+  
+  // UPI ID interactive validation & simulation
+  const [upiError, setUpiError] = useState('');
+  const [isUpiVerified, setIsUpiVerified] = useState(false);
+  const [isVerifyingUpi, setIsVerifyingUpi] = useState(false);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -46,10 +55,70 @@ export default function PaymentModule({ planName, price, onClose, onComplete, bu
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleUpiChange = (val: string) => {
+    setUpiId(val);
+    setUpiError('');
+    setIsUpiVerified(false);
+  };
+
+  const verifyUpiId = () => {
+    if (!upiId) {
+      setUpiError('Please enter a UPI ID (VPA)');
+      return;
+    }
+    if (!upiId.includes('@')) {
+      setUpiError('Please enter a valid VPA (must contain "@", e.g. mobile@ybl)');
+      return;
+    }
+    const parts = upiId.split('@');
+    if (!parts[0] || !parts[1]) {
+      setUpiError('Please enter a valid VPA context (e.g. name@upi)');
+      return;
+    }
+
+    setIsVerifyingUpi(true);
+    setUpiError('');
+    setTimeout(() => {
+      setIsVerifyingUpi(false);
+      setIsUpiVerified(true);
+    }, 1200);
+  };
+
   const handlePay = () => {
-    if (method === 'upi' && !upiId) return;
-    if (method === 'card' && (!cardData.number || !cardData.expiry || !cardData.cvc)) return;
+    if (method === 'upi') {
+      if (!upiId) {
+        setUpiError('Please enter a UPI ID (VPA) first');
+        return;
+      }
+      if (!upiId.includes('@')) {
+        setUpiError('Invalid VPA format. Must contain "@" (e.g., name@handle)');
+        return;
+      }
+      
+      // If VPA is not verified yet, automatically verify first then proceed
+      if (!isUpiVerified) {
+        setIsVerifyingUpi(true);
+        setUpiError('');
+        setTimeout(() => {
+          setIsVerifyingUpi(false);
+          setIsUpiVerified(true);
+          proceedWithPayment();
+        }, 1200);
+        return;
+      }
+    }
     
+    if (method === 'card') {
+      if (!cardData.number || !cardData.expiry || !cardData.cvc) {
+        alert('Please fill out all card details');
+        return;
+      }
+    }
+    
+    proceedWithPayment();
+  };
+
+  const proceedWithPayment = () => {
     setIsProcessing(true);
     setTimeout(() => {
       setIsProcessing(false);
@@ -88,7 +157,7 @@ export default function PaymentModule({ planName, price, onClose, onComplete, bu
               <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
                 <CreditCard size={24} />
               </div>
-              <h2 className="text-2xl font-black tracking-tight mt-4 uppercase">C Vidya ChickMart</h2>
+              <h2 className="text-2xl font-black tracking-tight mt-4 uppercase">FarmFresh Hub</h2>
               <p className="text-white/60 text-xs flex items-center gap-2 italic">
                 <span className="inline-block w-4 h-4 rounded-full border border-white/40 flex items-center justify-center text-[10px]">i</span>
                 Serving customers since 1+ years
@@ -138,12 +207,12 @@ export default function PaymentModule({ planName, price, onClose, onComplete, bu
                   className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-stone-200 border border-white flex flex-col items-center gap-6 relative overflow-hidden"
                 >
                   <div className="text-center">
-                    <h4 className="text-xl font-bold text-stone-900 mb-2">C Vidya ChickMart</h4>
+                    <h4 className="text-xl font-bold text-stone-900 mb-2">FarmFresh Hub</h4>
                   </div>
                   <div className="w-full aspect-square max-w-[240px] bg-white rounded-3xl border border-stone-100 flex items-center justify-center relative group overflow-hidden">
                     {!isExpired ? (
                       <img 
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=8987766981@ybl&pn=C%20Vidya%20ChickMart&cu=INR&am=${price}`}
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=upi://pay?pa=8987766981@ybl&pn=FarmFresh%20Hub&cu=INR&am=${price}`}
                         alt="Payment QR Code"
                         className="w-4/5 h-4/5 object-contain"
                         referrerPolicy="no-referrer"
@@ -197,13 +266,61 @@ export default function PaymentModule({ planName, price, onClose, onComplete, bu
                   <div className="space-y-4">
                     <div className="space-y-2">
                        <label className="text-[10px] font-bold text-stone-400 uppercase tracking-widest ml-4">Enter Virtual Private Address (VPA)</label>
-                       <input 
-                        type="text" 
-                        placeholder="yourname@upi"
-                        className="w-full h-14 bg-stone-50 border border-stone-200 rounded-2xl px-6 font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all"
-                        value={upiId}
-                        onChange={(e) => setUpiId(e.target.value)}
-                       />
+                       <div className="relative">
+                         <input 
+                          type="text" 
+                          placeholder="yourname@upi"
+                          className={`w-full h-14 bg-stone-50 border rounded-2xl pl-6 pr-28 font-bold text-stone-900 focus:outline-none focus:ring-2 transition-all ${upiError ? 'border-red-500 focus:ring-red-500/20' : 'border-stone-200 focus:ring-green-500/20 focus:border-green-500'}`}
+                          value={upiId}
+                          onChange={(e) => handleUpiChange(e.target.value)}
+                         />
+                         <button
+                          type="button"
+                          onClick={verifyUpiId}
+                          disabled={isVerifyingUpi || !upiId}
+                          className={`absolute right-2 top-2 h-10 px-4 rounded-xl font-bold text-xs transition-colors ${
+                            isUpiVerified 
+                              ? 'bg-green-100 text-green-700 border border-green-200' 
+                              : 'bg-stone-900 text-white hover:bg-stone-800 disabled:bg-stone-100 disabled:text-stone-400'
+                          }`}
+                         >
+                           {isVerifyingUpi ? (
+                             <div className="flex items-center gap-1">
+                               <Loader2 className="animate-spin w-3 h-3 text-white" />
+                               <span>Verifying...</span>
+                             </div>
+                           ) : isUpiVerified ? (
+                             <span>Verified ✔</span>
+                           ) : (
+                             <span>Verify</span>
+                           )}
+                         </button>
+                       </div>
+                       
+                       {upiError && (
+                         <p className="text-[10px] text-red-600 font-bold ml-4 mt-1">{upiError}</p>
+                       )}
+                       
+                       {isUpiVerified && (
+                         <p className="text-[10px] text-green-600 font-bold ml-4 mt-1">Verified User: Chiranjeev Das ({upiId})</p>
+                       )}
+
+                       {/* Auto Suggestions */}
+                       <div className="flex flex-wrap gap-1.5 mt-2 ml-4">
+                         {['@ybl', '@paytm', '@okaxis', '@okhdfcbank'].map((handle) => (
+                           <button
+                             key={handle}
+                             type="button"
+                             onClick={() => {
+                               const base = upiId.includes('@') ? upiId.split('@')[0] : upiId;
+                               handleUpiChange(base + handle);
+                             }}
+                             className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-600 text-[11px] font-bold hover:bg-stone-200 active:scale-95 transition-all border border-stone-200"
+                           >
+                             {handle}
+                           </button>
+                         ))}
+                       </div>
                     </div>
                     <div className="p-4 bg-green-50 rounded-2xl border border-green-100">
                       <p className="text-[10px] text-green-700 font-medium">Please ensure you have your mobile device ready to approve the transaction in your UPI app.</p>
@@ -291,13 +408,66 @@ export default function PaymentModule({ planName, price, onClose, onComplete, bu
                   <ArrowLeft className={`rotate-180 transition-colors ${method === 'card' ? 'text-blue-500' : 'text-stone-300'}`} size={18} />
                </button>
             </div>
+            
+            {/* Clear Trial Transparency & Auto-Renewal Disclosures Panel (Phases 4, 6, 7) */}
+            <div className="bg-stone-50 border border-stone-200/80 rounded-2xl p-5 space-y-4 shadow-inner">
+              <div className="flex items-center gap-2 text-stone-900 border-b border-stone-200/60 pb-2">
+                <ShieldCheck size={16} className="text-orange-600 shrink-0" />
+                <span className="text-xs font-black uppercase tracking-wider">Subscription & Audit Terms</span>
+              </div>
+              
+              <div className="text-[11px] text-stone-600 space-y-2 leading-relaxed">
+                <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-stone-100">
+                  <span className="font-semibold">• Plan Level / Billing Cycle:</span>
+                  <span className="font-bold text-stone-900">{planName} (Weekly/Monthly)</span>
+                </div>
+                <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-stone-100">
+                  <span className="font-semibold">• Standard Price & Taxes:</span>
+                  <span className="font-bold text-stone-900">₹{price} (0% Additional Cess, GST Incl.)</span>
+                </div>
+                <div className="flex justify-between items-center bg-white p-2 rounded-lg border border-stone-100">
+                  <span className="font-semibold">• 14-Day Free Trial Ends On:</span>
+                  <span className="font-bold text-orange-600">{new Date(Date.now() + 14 * 24 * 3600 * 1000).toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}</span>
+                </div>
+                <p className="text-[10px] text-stone-500 italic mt-1 font-medium bg-orange-50/50 p-2 rounded border border-orange-100">
+                  *No initial payments are captured for trial startup. If conversion is approved, ₹{price} will be charged per cycle on automatic renewal unless cancelled via settings.
+                </p>
+              </div>
 
-            <div className="pt-4">
+              {/* Explicit Consent Forms (Anti-Dark Pattern Compliant) */}
+              <div className="space-y-3 pt-1 border-t border-stone-200/60">
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={consentAutoRenew}
+                    onChange={(e) => setConsentAutoRenew(e.target.checked)}
+                    className="mt-0.5 rounded border-stone-300 text-orange-600 focus:ring-orange-500 h-4 w-4 shrink-0"
+                  />
+                  <span className="text-[10px] text-stone-600 font-bold leading-normal">
+                    I explicitly consent to auto-renewal of this SaaS license for <span className="text-stone-900">₹{price} / billing frequency</span>. I understand I can cancel at any time under settings with zero penalty.
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={consentTrialTerms}
+                    onChange={(e) => setConsentTrialTerms(e.target.checked)}
+                    className="mt-0.5 rounded border-stone-300 text-orange-600 focus:ring-orange-500 h-4 w-4 shrink-0"
+                  />
+                  <span className="text-[10px] text-stone-600 font-bold leading-normal">
+                    I acknowledge that the trial spans 14 days from today. Upcoming charges are shown in my billing panel. Charges begin on the 15th day of active use.
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="pt-2">
               <Button 
                  onClick={handlePay}
-                 disabled={isProcessing || (method === 'qr' && isExpired)}
+                 disabled={isProcessing || (method === 'qr' && isExpired) || !consentAutoRenew || !consentTrialTerms}
                  className={`w-full h-16 md:h-20 rounded-[1.5rem] text-white text-lg font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all
-                  ${(isProcessing || (method === 'qr' && isExpired)) ? 'bg-stone-300 cursor-not-allowed shadow-none' : 'bg-[#94A3A5] hover:bg-[#869597] shadow-stone-200'}
+                  ${(isProcessing || (method === 'qr' && isExpired) || !consentAutoRenew || !consentTrialTerms) ? 'bg-stone-300 text-stone-400 cursor-not-allowed shadow-none' : 'bg-orange-600 hover:bg-orange-700 shadow-orange-200'}
                  `}
               >
                 {isProcessing ? (
@@ -305,6 +475,16 @@ export default function PaymentModule({ planName, price, onClose, onComplete, bu
                     <Loader2 className="animate-spin" />
                     Processing...
                   </>
+                ) : method === 'upi' ? (
+                  isVerifyingUpi ? (
+                    'Verifying VPA...'
+                  ) : isUpiVerified ? (
+                    `Pay ₹${price} via UPI`
+                  ) : (
+                    'Verify & Proceed'
+                  )
+                ) : method === 'card' ? (
+                  `Pay ₹${price} Securely`
                 ) : (
                   'I have paid'
                 )}

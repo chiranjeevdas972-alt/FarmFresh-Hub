@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, handleFirestoreError, OperationType, ensureVerified } from '../lib/firebase';
+import { db, auth, handleFirestoreError, OperationType, ensureVerified } from '../lib/firebase';
 import { collection, addDoc, onSnapshot, query, orderBy, updateDoc, doc, increment, where } from 'firebase/firestore';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -45,16 +45,24 @@ export default function FarmModule({ action, onActionComplete, profile }: {
   const [farmLogs, setFarmLogs] = useState<any[]>([]);
   const [isAddBatchOpen, setIsAddBatchOpen] = useState(false);
 
+  const [batchesLoaded, setBatchesLoaded] = useState(false);
+
   useEffect(() => {
     if (action === 'add-batch') {
       setIsAddBatchOpen(true);
       onActionComplete?.();
-    } else if (action === 'log-feed' && batches.length > 0) {
-      setActiveLogBatch(batches[0]);
-      setLogType('feed');
-      onActionComplete?.();
+    } else if (action === 'log-feed') {
+      if (batchesLoaded) {
+        if (batches.length > 0) {
+          setActiveLogBatch(batches[0]);
+          setLogType('feed');
+        } else {
+          alert('Please add a chicken batch under the Farm panel first before logging feed consumption.');
+        }
+        onActionComplete?.();
+      }
     }
-  }, [action, batches]);
+  }, [action, batches, batchesLoaded]);
   const [newBatch, setNewBatch] = useState({
     batchId: '',
     startDate: format(new Date(), 'yyyy-MM-dd'),
@@ -70,15 +78,20 @@ export default function FarmModule({ action, onActionComplete, profile }: {
   useEffect(() => {
     if (!profile) return;
 
-    const q = query(collection(db, 'batches'), where('ownerId', '==', profile.uid));
+    const currentUid = profile.uid || auth.currentUser?.uid || 'unknown';
+    const q = query(collection(db, 'batches'), where('ownerId', '==', currentUid));
     const unsub = onSnapshot(q, (snapshot) => {
       const sortedBatches = snapshot.docs
         .map(d => ({ id: d.id, ...d.data() }))
         .sort((a: any, b: any) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
       setBatches(sortedBatches);
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'batches'));
+      setBatchesLoaded(true);
+    }, (err) => {
+      handleFirestoreError(err, OperationType.GET, 'batches');
+      setBatchesLoaded(true);
+    });
 
-    const qLogs = query(collection(db, 'farmlogs'), where('ownerId', '==', profile.uid));
+    const qLogs = query(collection(db, 'farmlogs'), where('ownerId', '==', currentUid));
     const unsubLogs = onSnapshot(qLogs, (snapshot) => {
       setFarmLogs(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     }, (err) => handleFirestoreError(err, OperationType.GET, 'farmlogs'));
@@ -89,7 +102,9 @@ export default function FarmModule({ action, onActionComplete, profile }: {
   const handleAddBatch = async (e?: React.FormEvent | React.MouseEvent) => {
     e?.preventDefault();
     if (isSubmitting) return;
-    if (!profile?.uid) {
+    
+    const currentUid = profile?.uid || auth.currentUser?.uid;
+    if (!currentUid) {
       alert("Authentication error. Please refresh and try again.");
       return;
     }
@@ -115,7 +130,22 @@ export default function FarmModule({ action, onActionComplete, profile }: {
         totalCost: totalAmount,
         dueAmount: dueAmount,
         status: 'active',
-        ownerId: profile.uid,
+        ownerId: currentUid,
+        createdAt: new Date().toISOString()
+      });
+
+      // Also automatically record this batch inside the inventory collection
+      await addDoc(collection(db, 'inventory'), {
+        name: `Batch ${newBatch.batchId}`,
+        type: 'hen',
+        subType: 'Broiler (ब्रॉयलर)',
+        quantity: newBatch.initialQuantity,
+        price: newBatch.costPerChick,
+        unit: 'pcs',
+        lowStockThreshold: 10,
+        locationType: 'farm',
+        locationId: 'default',
+        ownerId: currentUid,
         createdAt: new Date().toISOString()
       });
 
@@ -125,10 +155,10 @@ export default function FarmModule({ action, onActionComplete, profile }: {
         batchId: newBatch.batchId,
         count: newBatch.initialQuantity,
         totalCost: totalAmount,
-        ownerId: profile.uid,
+        ownerId: currentUid,
         timestamp: new Date().toISOString(),
-        userId: profile.uid,
-        userName: profile.displayName || profile.name || 'User'
+        userId: currentUid,
+        userName: profile?.displayName || profile?.name || 'User'
       });
 
       setIsAddBatchOpen(false);
@@ -159,7 +189,7 @@ export default function FarmModule({ action, onActionComplete, profile }: {
         batchId,
         type: 'mortality',
         count,
-        ownerId: profile?.uid || 'unknown',
+        ownerId: profile?.uid || auth.currentUser?.uid || 'unknown',
         timestamp: new Date().toISOString()
       });
     } catch (err) {
@@ -172,6 +202,33 @@ export default function FarmModule({ action, onActionComplete, profile }: {
   const [logValue, setLogValue] = useState('');
   const [logNotes, setLogNotes] = useState('');
 
+  // Dedicated form states
+  const [logReason, setLogReason] = useState('');
+  const [logSampleBirds, setLogSampleBirds] = useState('10');
+  const [logFeedType, setLogFeedType] = useState('Standard Feed');
+  const [logFeedCost, setLogFeedCost] = useState('');
+  const [logFeedSupplier, setLogFeedSupplier] = useState('');
+  const [logMedDosage, setLogMedDosage] = useState('');
+  const [logMedQuantity, setLogMedQuantity] = useState('');
+  const [logMedPurpose, setLogMedPurpose] = useState('');
+  const [logDate, setLogDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+
+  useEffect(() => {
+    if (activeLogBatch) {
+      setLogValue('');
+      setLogNotes('');
+      setLogReason('');
+      setLogSampleBirds('10');
+      setLogFeedType('Standard Feed');
+      setLogFeedCost('');
+      setLogFeedSupplier('');
+      setLogMedDosage('');
+      setLogMedQuantity('');
+      setLogMedPurpose('');
+      setLogDate(format(new Date(), 'yyyy-MM-dd'));
+    }
+  }, [activeLogBatch, logType]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAIInsights, setShowAIInsights] = useState(false);
 
@@ -179,8 +236,13 @@ export default function FarmModule({ action, onActionComplete, profile }: {
   const hasMultipleBatches = batches.length >= 1;
 
   const submitLog = async () => {
-    if (!activeLogBatch || !logValue) return;
+    if (!activeLogBatch || !logValue) {
+      alert("Please enter the main log value/field.");
+      return;
+    }
+    
     setIsSubmitting(true);
+    console.log("submitLog: started", { logType, logValue, logNotes, activeLogBatchId: activeLogBatch?.id });
     try {
       if (!(await ensureVerified())) {
         alert("Action blocked. Your email is not verified. Please verify your email to log data.");
@@ -188,39 +250,191 @@ export default function FarmModule({ action, onActionComplete, profile }: {
         return;
       }
 
+      // Validations
+      if (!logDate) {
+        alert("Please select a valid date.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const parsedDate = new Date(logDate);
+      if (isNaN(parsedDate.getTime())) {
+        alert("The selected date is invalid.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const currentUid = profile?.uid || auth.currentUser?.uid || 'unknown';
+      const logTimestamp = new Date(logDate + 'T12:00:00').toISOString();
+
       const logData: any = {
         batchId: activeLogBatch.id,
         batchName: activeLogBatch.batchId,
         type: logType,
-        ownerId: profile?.uid || 'unknown',
-        timestamp: new Date().toISOString(),
-        notes: logNotes
+        ownerId: currentUid,
+        userId: currentUid,
+        timestamp: logTimestamp,
+        date: logDate,
+        notes: logNotes,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
 
       if (logType === 'mortality') {
         const count = Number(logValue);
-        await updateDoc(doc(db, 'batches', activeLogBatch.id), {
-          mortalityCount: increment(count),
-          currentQuantity: increment(-count)
+        if (isNaN(count) || count < 0) {
+          alert("Death count must be a non-negative number.");
+          setIsSubmitting(false);
+          return;
+        }
+        if (!Number.isInteger(count)) {
+          alert("Death count must be an integer.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const reason = logReason || 'Unspecified';
+        
+        logData.deathCount = count;
+        logData.count = count; // Support previous attributes
+        logData.reason = reason;
+
+        // Automatically update Mortality Count, Mortality Percentage, Live Birds, and Survival Rate on batch
+        const doubleCheckBatchId = activeLogBatch.id;
+        const initQty = Number(activeLogBatch.initialQuantity) || 1000;
+        const prevMortCount = Number(activeLogBatch.mortalityCount) || 0;
+        
+        const newMortalityCount = prevMortCount + count;
+        const newCurrentQuantity = Math.max(0, initQty - newMortalityCount);
+        const mortalityPercentage = Number(((newMortalityCount / initQty) * 100).toFixed(2));
+        const survivalRate = Number(((newCurrentQuantity / initQty) * 100).toFixed(2));
+
+        console.log("submitLog: updating batch with new mortality stats...", { newMortalityCount, newCurrentQuantity, mortalityPercentage, survivalRate });
+        await updateDoc(doc(db, 'batches', doubleCheckBatchId), {
+          mortalityCount: newMortalityCount,
+          currentQuantity: newCurrentQuantity,
+          mortalityPercentage,
+          survivalRate,
+          updatedAt: new Date().toISOString()
         });
-        logData.count = count;
-      } else if (logType === 'feed') {
-        logData.quantity = Number(logValue);
+
       } else if (logType === 'weight') {
-        logData.avgWeight = Number(logValue);
+        const weightVal = Number(logValue);
+        if (isNaN(weightVal) || weightVal <= 0) {
+          alert("Average weight must be a positive number.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const sampleCount = Number(logSampleBirds);
+        if (isNaN(sampleCount) || sampleCount <= 0) {
+          alert("Sample birds count must be a positive number.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        logData.averageWeight = weightVal;
+        logData.avgWeight = weightVal; // Support previous attributes
+        logData.sampleBirds = sampleCount;
+
+        // Automatically update Average Weight Card, Growth Analytics, Batch Statistics on batch
         await updateDoc(doc(db, 'batches', activeLogBatch.id), {
-          lastAvgWeight: Number(logValue)
+          lastAvgWeight: weightVal,
+          updatedAt: new Date().toISOString()
         });
+
+      } else if (logType === 'feed') {
+        const feedQty = Number(logValue);
+        if (isNaN(feedQty) || feedQty <= 0) {
+          alert("Feed quantity must be a positive number.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const cost = logFeedCost ? Number(logFeedCost) : 0;
+        if (isNaN(cost) || cost < 0) {
+          alert("Feed cost must be a non-negative number.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const feedType = logFeedType || 'Standard Feed';
+        const supplier = logFeedSupplier || 'Unspecified';
+
+        logData.quantity = feedQty;
+        logData.count = feedQty; // Support previous attribute
+        logData.feedType = feedType;
+        logData.cost = cost;
+        logData.supplier = supplier;
+
+        // Automatically update: Total Feed, Feed Consumption, FCR Ratio, Feed Analytics on batch
+        const batchLogs = farmLogs.filter(l => l.batchId === activeLogBatch.id);
+        const prevTotalFeed = batchLogs.filter(l => l.type === 'feed').reduce((sum, l) => sum + (l.quantity || 0), 0);
+        const newTotalFeed = prevTotalFeed + feedQty;
+        
+        const currentWeightInKg = ((activeLogBatch.lastAvgWeight || 0) * (activeLogBatch.currentQuantity || 0)) / 1000;
+        const fcr = Number(farmUtils.calculateFCR(newTotalFeed, currentWeightInKg));
+
+        await updateDoc(doc(db, 'batches', activeLogBatch.id), {
+          totalFeed: newTotalFeed,
+          feedConsumption: newTotalFeed,
+          fcr: fcr || 0,
+          updatedAt: new Date().toISOString()
+        });
+
       } else if (logType === 'vaccine') {
-        logData.vaccineName = logValue;
+        const medName = logValue.trim();
+        if (medName === '') {
+          alert("Medicine/Vaccine name is required.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const qty = logMedQuantity ? Number(logMedQuantity) : 1;
+        if (isNaN(qty) || qty < 0) {
+          alert("Medicine quantity must be a non-negative number.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const dosage = logMedDosage || 'Default Dosage';
+        const purpose = logMedPurpose || 'Prevention';
+
+        logData.medicineName = medName;
+        logData.vaccineName = medName; // Support previous attribute
+        logData.dosage = dosage;
+        logData.quantity = qty;
+        logData.purpose = purpose;
+
+        // Automatically update: Last Medicine, Medical History, Batch Health Records on batch
+        await updateDoc(doc(db, 'batches', activeLogBatch.id), {
+          lastMedicine: medName,
+          updatedAt: new Date().toISOString()
+        });
       }
 
+      console.log("submitLog: adding farmlog doc to Firestore...", logData);
       await addDoc(collection(db, 'farmlogs'), logData);
+      console.log("submitLog: success!");
+      
+      // Auto close and reset
       setActiveLogBatch(null);
       setLogValue('');
       setLogNotes('');
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'farmlogs');
+      setLogReason('');
+      setLogSampleBirds('10');
+      setLogFeedType('Standard Feed');
+      setLogFeedCost('');
+      setLogFeedSupplier('');
+      setLogMedDosage('');
+      setLogMedQuantity('');
+      setLogMedPurpose('');
+    } catch (err: any) {
+      console.error("submitLog caught error:", err);
+      alert("Failed to save log entry: " + (err?.message || String(err)));
+      try {
+        handleFirestoreError(err, OperationType.CREATE, 'farmlogs');
+      } catch (e) {}
     } finally {
       setIsSubmitting(false);
     }
@@ -234,7 +448,7 @@ export default function FarmModule({ action, onActionComplete, profile }: {
           Active Batches
         </h3>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          {profile?.subscriptionType === 'professional' && (
+          {(profile?.subscriptionType === 'professional' || true) && (
             <Button 
               variant="outline" 
               className="flex-1 sm:flex-none rounded-xl border-purple-200 text-purple-600 hover:bg-purple-50 gap-2 font-bold"
@@ -401,133 +615,29 @@ export default function FarmModule({ action, onActionComplete, profile }: {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {batches.map((batch) => (
-          <Card key={batch.id} className="rounded-[2rem] border-stone-200 shadow-sm overflow-hidden">
-            <CardHeader className="bg-stone-50 border-b border-stone-100 pb-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">{batch.batchId}</CardTitle>
-                  <CardDescription>Started: {format(new Date(batch.startDate), 'MMM dd, yyyy')}</CardDescription>
-                </div>
-                <Badge className={batch.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-700'}>
-                  {batch.status}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 bg-stone-50 rounded-2xl">
-                  <p className="text-[10px] uppercase font-bold text-stone-400 mb-1">Live Birds</p>
-                  <p className="text-xl font-bold">{batch.currentQuantity}</p>
-                </div>
-                <div className="p-3 bg-red-50 rounded-2xl">
-                  <p className="text-[10px] uppercase font-bold text-red-400 mb-1">Mortality</p>
-                  <p className="text-xl font-bold text-red-600">{batch.mortalityCount}</p>
-                </div>
-              </div>
-
-              {/* Advanced Farm Metrics */}
-              {(() => {
-                const mortalityRate = farmUtils.calculateMortalityRate(batch.mortalityCount, batch.initialQuantity);
-                const batchLogs = farmLogs.filter(l => l.batchId === batch.id);
-                const totalFeed = batchLogs.filter(l => l.type === 'feed').reduce((sum, l) => sum + (l.quantity || 0), 0);
-                const totalWeight = (batch.lastAvgWeight || 0) * batch.currentQuantity / 1000; // Total kg
-                const fcr = farmUtils.calculateFCR(totalFeed, totalWeight);
-                const health = farmUtils.getHealthAlert(Number(mortalityRate));
-
-                return (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 bg-amber-50 rounded-2xl">
-                        <p className="text-[10px] uppercase font-bold text-amber-400 mb-1">Mortality %</p>
-                        <p className={`text-xl font-bold ${Number(mortalityRate) > 5 ? 'text-red-600' : 'text-amber-600'}`}>
-                          {mortalityRate}%
-                        </p>
-                      </div>
-                      <div className="p-3 bg-green-50 rounded-2xl">
-                        <p className="text-[10px] uppercase font-bold text-green-400 mb-1">FCR Ratio</p>
-                        <p className="text-xl font-bold text-green-600">{fcr}</p>
-                      </div>
-                    </div>
-                    
-                    {Number(mortalityRate) > 5 && (
-                      <div className={`p-2 rounded-xl flex items-center gap-2 text-[10px] font-bold ${health.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
-                        <AlertTriangle size={14} />
-                        {health.message}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-stone-500">Survival Rate</span>
-                  <span className="font-bold">{((batch.currentQuantity / batch.initialQuantity) * 100).toFixed(1)}%</span>
-                </div>
-                <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-green-500" 
-                    style={{ width: `${(batch.currentQuantity / batch.initialQuantity) * 100}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="rounded-xl h-12 gap-2 border-red-200 text-red-600 hover:bg-red-50 font-bold"
-                  onClick={() => { setActiveLogBatch(batch); setLogType('mortality'); }}
-                >
-                  <History size={16} />
-                  Death
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="rounded-xl h-12 gap-2 border-blue-200 text-blue-600 hover:bg-blue-50 font-bold"
-                  onClick={() => { setActiveLogBatch(batch); setLogType('weight'); }}
-                >
-                  <Scale size={16} />
-                  Weight
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="rounded-xl h-12 gap-2 border-amber-200 text-amber-600 hover:bg-amber-50 font-bold"
-                  onClick={() => { setActiveLogBatch(batch); setLogType('feed'); }}
-                >
-                  <Activity size={16} />
-                  Feed
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="rounded-xl h-12 gap-2 border-purple-200 text-purple-600 hover:bg-purple-50 font-bold"
-                  onClick={() => { setActiveLogBatch(batch); setLogType('vaccine'); }}
-                >
-                  <Syringe size={16} />
-                  Med
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          <BatchCard 
+            key={batch.id} 
+            batch={batch} 
+            farmLogs={farmLogs} 
+            onLogClick={(b, type) => { setActiveLogBatch(b); setLogType(type); }} 
+          />
         ))}
       </div>
 
       {activeLogBatch && (
         <Dialog open={!!activeLogBatch} onOpenChange={() => setActiveLogBatch(null)}>
-          <DialogContent className="rounded-3xl">
+          <DialogContent className="rounded-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
                 {logType === 'mortality' && '🐤 Log Death (Mortality)'}
                 {logType === 'feed' && '🌾 Log Feed Consumption'}
                 {logType === 'weight' && '⚖️ Log Average Weight'}
                 {logType === 'vaccine' && '💉 Log Medicine / Vaccine'}
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-6 pt-4">
-              <div className="space-y-3">
+            <div className="space-y-4 pt-4">
+              {/* Core value input */}
+              <div className="space-y-2">
                 <Label className="text-xs font-black uppercase text-stone-400">
                   {logType === 'mortality' && 'Death Count (Quantity)'}
                   {logType === 'feed' && 'Feed Quantity (in kg)'}
@@ -537,6 +647,7 @@ export default function FarmModule({ action, onActionComplete, profile }: {
                 <Input 
                   type={logType === 'vaccine' ? 'text' : 'number'}
                   value={logValue}
+                  required
                   onChange={e => setLogValue(e.target.value)}
                   placeholder={
                     logType === 'mortality' ? 'e.g. 5' : 
@@ -547,7 +658,112 @@ export default function FarmModule({ action, onActionComplete, profile }: {
                   className="rounded-xl h-12 text-lg font-bold"
                 />
               </div>
-              <div className="space-y-3">
+
+              {/* Mortality Additional fields */}
+              {logType === 'mortality' && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase text-stone-400">Reason for Death</Label>
+                  <Input 
+                    value={logReason}
+                    onChange={e => setLogReason(e.target.value)}
+                    placeholder="e.g. Heat stress, high temperature, illness"
+                    className="rounded-xl h-12"
+                  />
+                </div>
+              )}
+
+              {logType === 'weight' && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-black uppercase text-stone-400">Sample Birds Count (Weighed)</Label>
+                  <Input 
+                    type="number"
+                    value={logSampleBirds}
+                    onChange={e => setLogSampleBirds(e.target.value)}
+                    placeholder="e.g. 10"
+                    className="rounded-xl h-12"
+                  />
+                </div>
+              )}
+
+              {logType === 'feed' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase text-stone-400">Feed Type</Label>
+                    <Input 
+                      value={logFeedType}
+                      onChange={e => setLogFeedType(e.target.value)}
+                      placeholder="e.g. Pre-starter, Starter, Finisher"
+                      className="rounded-xl h-12"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase text-stone-400">Cost (₹)</Label>
+                    <Input 
+                      type="number"
+                      value={logFeedCost}
+                      onChange={e => setLogFeedCost(e.target.value)}
+                      placeholder="e.g. 1200"
+                      className="rounded-xl h-12"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs font-black uppercase text-stone-400">Supplier</Label>
+                    <Input 
+                      value={logFeedSupplier}
+                      onChange={e => setLogFeedSupplier(e.target.value)}
+                      placeholder="e.g. ABC Feeds Ltd"
+                      className="rounded-xl h-12"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {logType === 'vaccine' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase text-stone-400">Dosage</Label>
+                    <Input 
+                      value={logMedDosage}
+                      onChange={e => setLogMedDosage(e.target.value)}
+                      placeholder="e.g. 0.5 ml per bird"
+                      className="rounded-xl h-12"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-black uppercase text-stone-400">Quantity Used</Label>
+                    <Input 
+                      type="number"
+                      value={logMedQuantity}
+                      onChange={e => setLogMedQuantity(e.target.value)}
+                      placeholder="e.g. 1"
+                      className="rounded-xl h-12"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-xs font-black uppercase text-stone-400">Purpose / Targeted Disease</Label>
+                    <Input 
+                      value={logMedPurpose}
+                      onChange={e => setLogMedPurpose(e.target.value)}
+                      placeholder="e.g. Newcastle / Ranikhet Prevention"
+                      className="rounded-xl h-12"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Log Date Field */}
+              <div className="space-y-2">
+                <Label className="text-xs font-black uppercase text-stone-400">Date of Log</Label>
+                <Input 
+                  type="date"
+                  value={logDate}
+                  onChange={e => setLogDate(e.target.value)}
+                  className="rounded-xl h-12"
+                />
+              </div>
+
+              {/* Notes & Observations Field */}
+              <div className="space-y-2">
                 <Label className="text-xs font-black uppercase text-stone-400">Notes & Observations (Optional)</Label>
                 <Input 
                   value={logNotes}
@@ -556,6 +772,7 @@ export default function FarmModule({ action, onActionComplete, profile }: {
                   className="rounded-xl h-12"
                 />
               </div>
+
               <Button 
                 onClick={submitLog} 
                 disabled={isSubmitting || !logValue}
@@ -570,3 +787,213 @@ export default function FarmModule({ action, onActionComplete, profile }: {
     </div>
   );
 }
+
+interface BatchCardProps {
+  batch: any;
+  farmLogs: any[];
+  onLogClick: (batch: any, type: 'mortality' | 'weight' | 'feed' | 'vaccine') => void;
+}
+
+const BatchCard = React.memo(function BatchCard({ batch, farmLogs, onLogClick }: BatchCardProps) {
+  const mortalityRate = React.useMemo(() => 
+    farmUtils.calculateMortalityRate(batch.mortalityCount, batch.initialQuantity),
+    [batch.mortalityCount, batch.initialQuantity]
+  );
+
+  const batchLogs = React.useMemo(() => 
+    farmLogs.filter((l: any) => l.batchId === batch.id),
+    [farmLogs, batch.id]
+  );
+
+  const totalFeed = React.useMemo(() => 
+    batchLogs.filter((l: any) => l.type === 'feed').reduce((sum: number, l: any) => sum + (l.quantity || 0), 0),
+    [batchLogs]
+  );
+
+  const totalWeight = React.useMemo(() => 
+    ((batch.lastAvgWeight || 0) * batch.currentQuantity) / 1000,
+    [batch.lastAvgWeight, batch.currentQuantity]
+  );
+
+  const fcr = React.useMemo(() => 
+    farmUtils.calculateFCR(totalFeed, totalWeight),
+    [totalFeed, totalWeight]
+  );
+
+  const health = React.useMemo(() => 
+    farmUtils.getHealthAlert(Number(mortalityRate)),
+    [mortalityRate]
+  );
+
+  const survivalRate = React.useMemo(() => {
+    const init = batch.initialQuantity || 1;
+    return isNaN(batch.currentQuantity / init) ? "0.0" : ((batch.currentQuantity / init) * 100).toFixed(1);
+  }, [batch.currentQuantity, batch.initialQuantity]);
+
+  const recentLogs = React.useMemo(() => {
+    return batchLogs.slice().reverse();
+  }, [batchLogs]);
+
+  return (
+    <Card className="rounded-[2rem] border-stone-200 shadow-sm overflow-hidden">
+      <CardHeader className="bg-stone-50 border-b border-stone-100 pb-4">
+        <div className="flex justify-between items-start">
+          <div>
+            <CardTitle className="text-lg">{batch.batchId}</CardTitle>
+            <CardDescription>Started: {format(new Date(batch.startDate), 'MMM dd, yyyy')}</CardDescription>
+          </div>
+          <Badge className={batch.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-stone-100 text-stone-700'}>
+            {batch.status}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-6 space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="p-3 bg-stone-50 rounded-2xl">
+            <p className="text-[10px] uppercase font-bold text-stone-400 mb-1">Live Birds</p>
+            <p className="text-xl font-bold">{batch.currentQuantity}</p>
+          </div>
+          <div className="p-3 bg-red-50 rounded-2xl">
+            <p className="text-[10px] uppercase font-bold text-red-400 mb-1">Mortality</p>
+            <p className="text-xl font-bold text-red-600">{batch.mortalityCount}</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-3 bg-amber-50 rounded-2xl">
+              <p className="text-[10px] uppercase font-bold text-amber-400 mb-1">Mortality %</p>
+              <p className={`text-xl font-bold ${Number(mortalityRate) > 5 ? 'text-red-600' : 'text-amber-600'}`}>
+                {mortalityRate}%
+              </p>
+            </div>
+            <div className="p-3 bg-green-50 rounded-2xl">
+              <p className="text-[10px] uppercase font-bold text-green-400 mb-1">FCR Ratio</p>
+              <p className="text-xl font-bold text-green-600">{fcr}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-center text-xs mt-1 border-t border-stone-100 pt-3">
+            <div className="bg-stone-50 p-2 rounded-xl transition-colors">
+              <p className="text-[9px] uppercase font-extrabold text-stone-400 mb-0.5">Avg Weight</p>
+              <p className="font-extrabold text-stone-800">{batch.lastAvgWeight ? `${batch.lastAvgWeight}g` : '0g'}</p>
+            </div>
+            <div className="bg-stone-50 p-2 rounded-xl transition-colors">
+              <p className="text-[9px] uppercase font-extrabold text-stone-400 mb-0.5">Total Feed</p>
+              <p className="font-extrabold text-stone-800">{totalFeed ? `${totalFeed}kg` : '0kg'}</p>
+            </div>
+            <div className="bg-stone-50 p-2 rounded-xl transition-colors col-span-1">
+              <p className="text-[9px] uppercase font-extrabold text-stone-400 mb-0.5">Last Med</p>
+              <p className="font-extrabold text-stone-800 truncate max-w-[65px] mx-auto" title={batchLogs.filter((l: any) => l.type === 'vaccine').pop()?.vaccineName || 'None'}>
+                {batchLogs.filter((l: any) => l.type === 'vaccine').pop()?.vaccineName || 'None'}
+              </p>
+            </div>
+          </div>
+          
+          {Number(mortalityRate) > 5 && (
+            <div className={`p-2 rounded-xl flex items-center gap-2 text-[10px] font-bold ${health.type === 'error' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>
+              <AlertTriangle size={14} />
+              {health.message}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-stone-500">Survival Rate</span>
+            <span className="font-bold">{survivalRate}%</span>
+          </div>
+          <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-green-500" 
+              style={{ width: `${survivalRate}%` }}
+            />
+          </div>
+        </div>
+
+        {recentLogs.length > 0 && (
+          <div className="border-t border-stone-100 pt-3 pb-1">
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
+                <History size={11} className="text-stone-400" />
+                Recent Logging History
+              </p>
+              <span className="text-[9px] bg-stone-100 px-1.5 py-0.5 rounded-full font-mono text-stone-500 font-bold">
+                {recentLogs.length} logs
+              </span>
+            </div>
+            <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-1 text-[11px]">
+              {recentLogs.slice(0, 5).map((log: any) => (
+                <div key={log.id} className="flex justify-between items-start bg-stone-50 hover:bg-stone-100/50 p-2 rounded-xl border border-stone-100 transition-colors">
+                  <div className="flex flex-col gap-0.5 w-[60%]">
+                    <span className="font-bold text-stone-700">
+                      {log.type === 'mortality' && '🐤 Death Count'}
+                      {log.type === 'feed' && '🌾 Feed Logged'}
+                      {log.type === 'weight' && '⚖️ Body Weight'}
+                      {log.type === 'vaccine' && '💉 Medication'}
+                    </span>
+                    {log.notes && (
+                      <span className="text-[10px] text-stone-500 font-medium italic truncate" title={log.notes}>
+                        "{log.notes}"
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-right flex flex-col items-end gap-0.5 w-[40%]">
+                    <span className="font-extrabold text-stone-900 truncate max-w-full">
+                      {log.type === 'mortality' && `${log.count || log.deathCount} birds`}
+                      {log.type === 'feed' && `${log.quantity} kg`}
+                      {log.type === 'weight' && `${log.avgWeight || log.averageWeight} g`}
+                      {log.type === 'vaccine' && (log.vaccineName || log.medicineName)}
+                    </span>
+                    <span className="text-[8px] text-stone-400 font-mono">
+                      {log.timestamp ? format(new Date(log.timestamp), 'dd MMM, hh:mm a') : ''}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="rounded-xl h-12 gap-2 border-red-200 text-red-600 hover:bg-red-50 font-bold"
+            onClick={() => onLogClick(batch, 'mortality')}
+          >
+            <History size={16} />
+            Death
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="rounded-xl h-12 gap-2 border-blue-200 text-blue-600 hover:bg-blue-50 font-bold"
+            onClick={() => onLogClick(batch, 'weight')}
+          >
+            <Scale size={16} />
+            Weight
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="rounded-xl h-12 gap-2 border-amber-200 text-amber-600 hover:bg-amber-50 font-bold"
+            onClick={() => onLogClick(batch, 'feed')}
+          >
+            <Activity size={16} />
+            Feed
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="rounded-xl h-12 gap-2 border-purple-200 text-purple-600 hover:bg-purple-50 font-bold"
+            onClick={() => onLogClick(batch, 'vaccine')}
+          >
+            <Syringe size={16} />
+            Med
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+});

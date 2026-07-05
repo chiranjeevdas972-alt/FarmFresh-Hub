@@ -1,0 +1,15 @@
+/*
+  # 1. Transport Encryption Assurance
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+  # 2. Frame Protection (Omitted to allow rendering in AI Studio dev/pre iframes)
+  # X-Frame-Options is omitted for iframe preview compatibility
+
+  # 3. Prevent Client-Side Content Sniffing Or MIME Spoofing
+  X-Content-Type-Options: nosniff
+
+  # 4. Strict Referrer Exposure Prevention Rules
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # 5. Restrict Peripheral Interface Devices
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=()

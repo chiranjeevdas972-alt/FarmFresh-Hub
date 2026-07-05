@@ -1,0 +1,18 @@
+# robots.txt for FarmFresh Hub (Smart Livestock SaaS Platform)
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /about
+Allow: /features
+Allow: /pricing
+Allow: /contact
+
+# Prevent crawlers from indexing core personal dashboard routes or administration zones
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /payment/
+Disallow: /callback/
+Disallow: /otp_verify/
+
+# Sitemap location
+Sitemap: https://farmfresh-hub.com/sitemap.xml

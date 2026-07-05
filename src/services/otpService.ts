@@ -104,7 +104,7 @@ export const otpService = {
           verified: true
         });
         
-        return { success: true, message: 'Welcome to ChickMart 🎉' };
+        return { success: true, message: 'Welcome to Farm Fresh Hub 🎉' };
       } else {
         return { success: false, message: 'Invalid OTP' };
       }

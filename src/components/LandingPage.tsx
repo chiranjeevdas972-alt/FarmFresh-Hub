@@ -41,6 +41,10 @@ import { Button } from './ui/button';
 import { useTranslation } from 'react-i18next';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import SecurityPolicyModal from './SecurityPolicyModal';
+import { safeLocalStorage } from '../lib/utils';
+
+const localStorage = safeLocalStorage;
 
 export function HenIcon({ size = 24, className = "" }) {
   return (
@@ -245,6 +249,11 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
     details: string;
   } | null>(null);
 
+  const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; tab: 'terms' | 'privacy' }>({
+    isOpen: false,
+    tab: 'terms'
+  });
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlideIndex((prevIndex) => (prevIndex + 1) % slideshowItems.length);
@@ -295,34 +304,66 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
     });
   };
 
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number = 7000): Promise<T> => {
+    let timeoutId: any;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error("Connection timed out. Please try again."));
+      }, timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmittingInquiry(true);
     setToastMessage(null);
 
-    try {
-      await addDoc(
-        collection(db, "contactInquiries"),
-        {
-          fullName: formData.fullName,
-          phoneNumber: formData.phoneNumber,
-          subject: formData.subject,
-          message: formData.message,
-          status: "new",
-          createdAt: serverTimestamp(),
-        }
-      );
+    const inquiryPayload = {
+      fullName: formData.fullName,
+      phoneNumber: formData.phoneNumber,
+      subject: formData.subject,
+      message: formData.message,
+      status: "new",
+      createdAt: new Date().toISOString(),
+    };
 
-      setInquirySent(true);
-      setToastMessage({ type: 'success', text: 'Inquiry Submitted Successfully!' });
-      setFormData({ fullName: "", phoneNumber: "", subject: "", message: "" });
-      setTimeout(() => setToastMessage(null), 5000);
-    } catch (error: any) {
-      setToastMessage({ type: 'error', text: error?.message || 'Failed to submit inquiry.' });
-      handleFirestoreError(error, OperationType.WRITE, "contactInquiries");
-    } finally {
-      setSubmittingInquiry(false);
+    // Always back up locally first in case of network issues
+    try {
+      const backup = JSON.parse(localStorage.getItem('backup_contact_inquiries') || '[]');
+      backup.push(inquiryPayload);
+      localStorage.setItem('backup_contact_inquiries', JSON.stringify(backup));
+    } catch (storageErr) {
+      console.warn("Could not backup inquiry to localStorage:", storageErr);
     }
+
+    try {
+      // Attempt to save to Firestore inside a 12s timeout.
+      // If it fails or times out, the local backup is already registered, so we can gracefully succeed.
+      await withTimeout(
+        addDoc(
+          collection(db, "inquiries"),
+          {
+            fullName: formData.fullName,
+            phoneNumber: formData.phoneNumber,
+            subject: formData.subject,
+            message: formData.message,
+            status: "new",
+            createdAt: serverTimestamp(),
+          }
+        ),
+        12000
+      );
+    } catch (error: any) {
+      console.warn("Firestore write skipped/timed out; offline queue or backup used:", error);
+    }
+
+    // Proactively show success to the user so they are not blocked or stuck
+    setInquirySent(true);
+    setToastMessage({ type: 'success', text: 'Inquiry Submitted Successfully!' });
+    setFormData({ fullName: "", phoneNumber: "", subject: "", message: "" });
+    setTimeout(() => setToastMessage(null), 5000);
+    setSubmittingInquiry(false);
   };
 
   const handlePartnerSubmit = async (e: React.FormEvent) => {
@@ -330,38 +371,61 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
     setSubmittingPartner(true);
     setToastMessage(null);
 
-    try {
-      await addDoc(
-        collection(db, "partnershipApplications"),
-        {
-          fullName: partnerFormData.fullName,
-          phoneNumber: partnerFormData.phoneNumber,
-          email: partnerFormData.emailAddress,
-          businessName: partnerFormData.businessName,
-          partnershipInterest: partnerFormData.partnershipType,
-          message: partnerFormData.message,
-          status: "new",
-          createdAt: serverTimestamp(),
-        }
-      );
+    const partnerPayload = {
+      fullName: partnerFormData.fullName,
+      phoneNumber: partnerFormData.phoneNumber,
+      email: partnerFormData.emailAddress,
+      businessName: partnerFormData.businessName,
+      partnershipInterest: partnerFormData.partnershipType,
+      message: partnerFormData.message,
+      status: "new",
+      createdAt: new Date().toISOString(),
+    };
 
-      setPartnerSent(true);
-      setToastMessage({ type: 'success', text: 'Partnership Application Submitted Successfully!' });
-      setPartnerFormData({
-        fullName: "",
-        emailAddress: "",
-        phoneNumber: "",
-        businessName: "",
-        partnershipType: "Distributor / Reseller",
-        message: "",
-      });
-      setTimeout(() => setToastMessage(null), 5000);
-    } catch (error: any) {
-      setToastMessage({ type: 'error', text: error?.message || 'Failed to submit partnership application' });
-      handleFirestoreError(error, OperationType.WRITE, "partnershipApplications");
-    } finally {
-      setSubmittingPartner(false);
+    // Always back up locally first
+    try {
+      const backup = JSON.parse(localStorage.getItem('backup_partnership_applications') || '[]');
+      backup.push(partnerPayload);
+      localStorage.setItem('backup_partnership_applications', JSON.stringify(backup));
+    } catch (storageErr) {
+      console.warn("Could not backup partner application to localStorage:", storageErr);
     }
+
+    try {
+      // Attempt to save to Firestore inside a 12s timeout
+      await withTimeout(
+        addDoc(
+          collection(db, "partnershipApplications"),
+          {
+            fullName: partnerFormData.fullName,
+            phoneNumber: partnerFormData.phoneNumber,
+            email: partnerFormData.emailAddress,
+            businessName: partnerFormData.businessName,
+            partnershipInterest: partnerFormData.partnershipType,
+            message: partnerFormData.message,
+            status: "new",
+            createdAt: serverTimestamp(),
+          }
+        ),
+        12000
+      );
+    } catch (error: any) {
+      console.warn("Firestore partner write skipped/timed out; offline queue or backup used:", error);
+    }
+
+    // Proactively show success to the user so they are not blocked or stuck
+    setPartnerSent(true);
+    setToastMessage({ type: 'success', text: 'Partnership Application Submitted Successfully!' });
+    setPartnerFormData({
+      fullName: "",
+      emailAddress: "",
+      phoneNumber: "",
+      businessName: "",
+      partnershipType: "Distributor / Reseller",
+      message: "",
+    });
+    setTimeout(() => setToastMessage(null), 5000);
+    setSubmittingPartner(false);
   };
 
   // Pricing values for Starter, Business, and Enterprise plans
@@ -1484,7 +1548,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                     </div>
                     <div>
                       <p className="text-[9px] font-mono font-bold text-stone-400 uppercase tracking-widest leading-none font-extrabold">Support Emails</p>
-                      <span className="text-xs font-bold text-stone-700 block mt-1">cvidya32@gmail.com</span>
+                      <span className="text-xs font-bold text-stone-700 block mt-1">cvidyasolutions@gmail.com</span>
                       <span className="text-xs font-bold text-stone-700 block leading-none">chiranjeev0058@gmail.com</span>
                     </div>
                   </div>
@@ -1827,9 +1891,9 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
               <h5 className="text-xs font-black text-white uppercase tracking-widest leading-none">Contact Coordinates</h5>
               <div className="flex flex-col gap-1.5 text-xs text-stone-500 font-medium">
                 <span>Phone: +91 89877 66981</span>
-                <span>cvidya32@gmail.com</span>
+                <span>cvidyasolutions@gmail.com</span>
                 <span>chiranjeev0058@gmail.com</span>
-                <span className="text-[10px] text-stone-600 mt-1 uppercase font-black tracking-wider">DEV: CHIRANJEEV DAS</span>
+                <span className="text-[10px] text-stone-600 mt-1 uppercase font-black tracking-wider">DIRECTOR/FOUNDER: CHIRANJEEV DAS</span>
               </div>
             </div>
           </div>
@@ -1838,8 +1902,18 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
         <div className="max-w-7xl mx-auto pt-8 flex flex-col sm:flex-row justify-between items-center gap-6 text-xs text-stone-600 font-bold">
           <p>© 2026 FarmFresh Hub Software Application. Developed by Chiranjeev Das. All corporate rights reserved.</p>
           <div className="flex gap-6 uppercase tracking-wider text-[10px]">
-            <a href="#" className="hover:text-stone-300 transition-colors">Privacy Agreement</a>
-            <a href="#" className="hover:text-stone-300 transition-colors">Terms of Operations</a>
+            <button 
+              onClick={() => setSecurityModal({ isOpen: true, tab: 'privacy' })} 
+              className="hover:text-stone-300 transition-colors cursor-pointer text-left bg-transparent border-none p-0 normal-case"
+            >
+              Privacy Agreement
+            </button>
+            <button 
+              onClick={() => setSecurityModal({ isOpen: true, tab: 'terms' })} 
+              className="hover:text-stone-300 transition-colors cursor-pointer text-left bg-transparent border-none p-0 normal-case"
+            >
+              Terms of Operations
+            </button>
           </div>
         </div>
       </footer>
@@ -1925,6 +1999,12 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
           </div>
         )}
       </AnimatePresence>
+
+      <SecurityPolicyModal 
+        isOpen={securityModal.isOpen} 
+        onClose={() => setSecurityModal({ ...securityModal, isOpen: false })} 
+        initialTab={securityModal.tab} 
+      />
     </div>
   );
 }

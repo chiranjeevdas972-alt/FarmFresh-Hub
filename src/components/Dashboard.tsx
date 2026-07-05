@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
-import { Bird, ShoppingBag, LayoutDashboard, LogOut, Package, History, BrainCircuit, Plus, Users, Wallet, BarChart3, Truck, FileText, ShieldCheck, ArrowLeft, Menu, X } from 'lucide-react';
+import { Bird, ShoppingBag, LayoutDashboard, LogOut, Package, History, BrainCircuit, Plus, Users, Wallet, BarChart3, Truck, FileText, ShieldCheck, ArrowLeft, Menu, X, Lock, Sparkles, Check } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
@@ -15,9 +15,12 @@ import AdvancedReportingModule from './AdvancedReportingModule';
 import AdminModule from './AdminModule';
 import Activity from './Activity';
 import NotificationCenter from './NotificationCenter';
+import FeatureLockedScreen from './FeatureLockedScreen';
 import { useTranslation } from 'react-i18next';
+import SecurityPolicyModal from './SecurityPolicyModal';
+import AccountGovernanceModal from './AccountGovernanceModal';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { collection, query, onSnapshot, orderBy, limit, where } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, limit, where, doc, updateDoc } from 'firebase/firestore';
 
 interface DashboardProps {
   user: FirebaseUser;
@@ -55,6 +58,13 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
   const [moduleAction, setModuleAction] = useState<string | null>(null);
   const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [gatedPlanRequired, setGatedPlanRequired] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [securityModal, setSecurityModal] = useState<{ isOpen: boolean; tab: 'terms' | 'privacy' }>({
+    isOpen: false,
+    tab: 'terms'
+  });
+  const [showGovernance, setShowGovernance] = useState(false);
   const { t } = useTranslation();
   const [stats, setStats] = useState({
     birdsFromInventory: 0,
@@ -125,7 +135,44 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
     { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={18} /> },
   ];
 
+  const isPlanGated = (tabId: string) => {
+    return null;
+  };
+
+  const visibleMenuItems = menuItems.filter(item => {
+    if (item.id === 'overview' || item.id === 'admin') return true;
+    const toggles = profile?.featureToggles || {};
+    if (toggles[item.id] === false) return false;
+    return true;
+  });
+
+  const isFeatureDisabled = (tabId: string) => {
+    if (tabId === 'overview' || tabId === 'admin') return false;
+    const toggles = profile?.featureToggles || {};
+    return toggles[tabId] === false;
+  };
+
+  const getFeatureName = (tabId: string) => {
+    switch (tabId) {
+      case 'farm': return 'Farm Management & Batches';
+      case 'shop': return 'POS Billing & Shop Sales';
+      case 'inventory': return 'Stock Management & Inventory';
+      case 'accounts': return 'Ledger Accounts & Balance';
+      case 'customers': return 'Customer Directory & CRM';
+      case 'delivery': return 'Delivery & Shipping Logistics';
+      case 'advanced_reports': return 'Financial Reporting & Profit/Loss';
+      case 'analytics': return 'Predictive Smart AI & Graphs';
+      default: return 'Requested Feature';
+    }
+  };
+
   const handleTabChange = (id: string) => {
+    const requiredPlan = isPlanGated(id);
+    if (requiredPlan) {
+      setGatedPlanRequired(requiredPlan);
+      setShowUpgradeModal(true);
+      return;
+    }
     setActiveTab(id);
     setIsSidebarOpen(false);
     if (id === 'inventory') {
@@ -134,7 +181,7 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
   };
 
   return (
-    <div className="flex h-screen bg-stone-50 overflow-hidden relative">
+    <div className="flex h-screen lg:h-screen min-h-[100dvh] bg-stone-50 overflow-hidden relative safe-px">
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
         <div 
@@ -144,13 +191,15 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed lg:relative inset-y-0 left-0 w-64 bg-white border-r border-stone-200 flex flex-col z-[200] transition-transform duration-300 transform lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed lg:relative inset-y-0 left-0 w-64 bg-white border-r border-stone-200 flex flex-col z-[200] transition-transform duration-300 transform lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} safe-pt safe-pb`}>
         <div className="p-6 flex items-center justify-between lg:justify-start gap-3 border-b border-stone-100">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center text-white">
               <HenIcon size={20} />
             </div>
-            <span className="font-bold text-lg tracking-tight text-stone-900">ChickMart</span>
+            <span className="font-bold text-lg tracking-tight text-stone-900 truncate max-w-[150px]" title={profile?.businessName || 'Farm Fresh Hub'}>
+              {profile?.businessName || 'Farm Fresh Hub'}
+            </span>
           </div>
           <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-2 text-stone-400 hover:text-stone-900 transition-colors">
             <X size={20} />
@@ -158,20 +207,28 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
         </div>
 
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {menuItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleTabChange(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                activeTab === item.id 
-                  ? 'bg-stone-900 text-white shadow-lg shadow-stone-200' 
-                  : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
+          {visibleMenuItems.map((item) => {
+            const reqPlan = isPlanGated(item.id);
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabChange(item.id)}
+                className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                  activeTab === item.id 
+                    ? 'bg-stone-900 text-white shadow-lg shadow-stone-200' 
+                    : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {item.icon}
+                  {item.label}
+                </div>
+                {reqPlan && (
+                  <Lock size={12} className="text-orange-600 shrink-0 opacity-70" />
+                )}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="p-4 border-t border-stone-100">
@@ -201,6 +258,32 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
               </div>
             </div>
           </div>
+
+          <div className="flex flex-col gap-2 px-4 mb-3 border-t border-stone-100 pt-3 select-none">
+            <div className="flex justify-between items-center text-[10px] text-stone-400 font-extrabold uppercase tracking-widest">
+              <button
+                onClick={() => setSecurityModal({ isOpen: true, tab: 'terms' })}
+                className="hover:text-stone-700 transition-colors cursor-pointer bg-transparent border-none p-0 normal-case font-extrabold"
+              >
+                Terms
+              </button>
+              <span>•</span>
+              <button
+                onClick={() => setSecurityModal({ isOpen: true, tab: 'privacy' })}
+                className="hover:text-stone-700 transition-colors cursor-pointer bg-transparent border-none p-0 normal-case font-extrabold"
+              >
+                Privacy
+              </button>
+              <span>•</span>
+              <button
+                onClick={() => setShowGovernance(true)}
+                className="hover:text-stone-900 text-orange-600 transition-colors cursor-pointer bg-transparent border-none p-0 normal-case font-extrabold underline decoration-orange-600/30"
+              >
+                Data Control
+              </button>
+            </div>
+          </div>
+
           <Button 
             onClick={onLogout} 
             variant="ghost" 
@@ -213,7 +296,7 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 pt-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 pt-6 safe-pt safe-pb">
         <header className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
           <div className="flex items-center gap-3 w-full sm:w-auto">
             <button 
@@ -301,7 +384,7 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
                   <Card 
                     key={i} 
                     className="rounded-3xl border-stone-200 shadow-sm overflow-hidden cursor-pointer hover:border-orange-200 transition-colors group"
-                    onClick={() => setActiveTab(stat.target)}
+                    onClick={() => handleTabChange(stat.target)}
                   >
                     <CardHeader className="pb-2">
                       <CardTitle className="text-[10px] sm:text-xs font-bold uppercase tracking-widest text-stone-400 group-hover:text-orange-500 transition-colors">{stat.label}</CardTitle>
@@ -376,25 +459,110 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
           )}
 
           <div className="w-full">
-            {activeTab === 'farm' && <FarmModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
-            {activeTab === 'shop' && <ShopModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
-            {activeTab === 'inventory' && <InventoryModule profile={profile} initialFilter={inventoryFilter} />}
-            {activeTab === 'accounts' && <AccountsModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
-            {activeTab === 'customers' && <CustomerModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
-            {activeTab === 'delivery' && <DeliveryModule profile={profile} />}
-            {activeTab === 'advanced_reports' && <AdvancedReportingModule profile={profile} />}
-            {activeTab === 'admin' && <Activity profile={profile} />}
-            {activeTab === 'analytics' && (
-              <AnalyticsModule 
-                onNavigate={(tab) => setActiveTab(tab)} 
-                action={moduleAction} 
-                onActionComplete={() => setModuleAction(null)} 
-                profile={profile}
+            {isFeatureDisabled(activeTab) ? (
+              <FeatureLockedScreen 
+                featureName={getFeatureName(activeTab)} 
+                role={profile?.role} 
+                onBackToOverview={() => setActiveTab('overview')} 
+                onGoToAdmin={() => setActiveTab('admin')} 
               />
+            ) : (
+              <>
+                {activeTab === 'farm' && <FarmModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
+                {activeTab === 'shop' && <ShopModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
+                {activeTab === 'inventory' && <InventoryModule profile={profile} initialFilter={inventoryFilter} />}
+                {activeTab === 'accounts' && <AccountsModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
+                {activeTab === 'customers' && <CustomerModule action={moduleAction} onActionComplete={() => setModuleAction(null)} profile={profile} />}
+                {activeTab === 'delivery' && <DeliveryModule profile={profile} />}
+                {activeTab === 'advanced_reports' && <AdvancedReportingModule profile={profile} />}
+                {activeTab === 'admin' && <Activity profile={profile} />}
+                {activeTab === 'analytics' && (
+                  <AnalyticsModule 
+                    onNavigate={(tab) => setActiveTab(tab)} 
+                    action={moduleAction} 
+                    onActionComplete={() => setModuleAction(null)} 
+                    profile={profile}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
       </main>
+
+      {/* Dynamic Subscription Gating Dialog */}
+      <Dialog open={showUpgradeModal} onOpenChange={setShowUpgradeModal}>
+        <DialogContent className="rounded-[2.5rem] p-8 max-w-md border-stone-200">
+          <DialogHeader className="space-y-4">
+            <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-600">
+              <Sparkles size={24} className="animate-pulse" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-stone-900 tracking-tight">
+              Unlock {gatedPlanRequired}!
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6 pt-4">
+            <p className="text-stone-500 text-xs leading-relaxed">
+              This panel belongs to professional logistics & analytics dashboards, requiring the <span className="font-bold text-stone-900">{gatedPlanRequired}</span> scale. Upgrade now to enable connected warehouses, AI demand predictions, and thermal invoicing.
+            </p>
+
+            <div className="p-4 bg-stone-50 border border-stone-100 rounded-2xl space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-stone-850">
+                <Check size={14} className="text-emerald-600" />
+                <span>Gain 100% full instant access</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-bold text-stone-850">
+                <Check size={14} className="text-emerald-600" />
+                <span>Connected clouds & offline backups</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <Button 
+                onClick={async () => {
+                  if (!user?.uid) return;
+                  try {
+                    const userRef = doc(db, 'users', user.uid);
+                    await updateDoc(userRef, {
+                      subscriptionType: (gatedPlanRequired || '').toLowerCase()
+                    });
+                    setShowUpgradeModal(false);
+                    setGatedPlanRequired(null);
+                    alert(`Success! Activated the ${gatedPlanRequired} subscription level.`);
+                  } catch (e) {
+                    console.error(e);
+                  }
+                }}
+                className="w-full h-12 rounded-xl text-xs font-bold bg-stone-900 text-white hover:bg-stone-800"
+              >
+                Instant Upgrade to {gatedPlanRequired}
+              </Button>
+              <Button 
+                variant="ghost" 
+                onClick={() => setShowUpgradeModal(false)}
+                className="w-full text-xs text-stone-450 hover:bg-stone-50 rounded-xl h-10"
+              >
+                Cancel & Go Back
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <SecurityPolicyModal 
+        isOpen={securityModal.isOpen} 
+        onClose={() => setSecurityModal({ ...securityModal, isOpen: false })} 
+        initialTab={securityModal.tab} 
+      />
+
+      <AccountGovernanceModal 
+        isOpen={showGovernance}
+        onClose={() => setShowGovernance(false)}
+        user={user}
+        profile={profile}
+        onLogout={onLogout}
+      />
     </div>
   );
 }

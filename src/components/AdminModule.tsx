@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { db, handleFirestoreError, OperationType, ensureVerified } from '../lib/firebase';
-import { collection, onSnapshot, query, orderBy, limit, doc, getDoc, where, updateDoc, addDoc, increment, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, doc, getDoc, where, updateDoc, addDoc, increment, getDocs, setDoc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -13,7 +14,7 @@ import {
   CheckCircle2, AlertCircle, Building2, Save, QrCode, MessageSquare, 
   Share2, Key, RefreshCw, Cloud, Bell, Users, Plus, Trash2, Check, 
   Download, ExternalLink, Calendar, MapPin, Layers, Briefcase, 
-  DollarSign, Eye, Phone, Sparkles, AlertTriangle
+  DollarSign, Eye, Phone, Sparkles, AlertTriangle, FileText
 } from 'lucide-react';
 
 export default function AdminModule({ profile }: { profile: any }) {
@@ -21,6 +22,7 @@ export default function AdminModule({ profile }: { profile: any }) {
   const [adminTab, setAdminTab] = useState('profile');
   const [filter, setFilter] = useState('all');
   const [isSaving, setIsSaving] = useState(false);
+  const [activeTemplate, setActiveTemplate] = useState(profile?.activeInvoiceTemplate || 'classic');
   
   // Real dynamic collections state
   const [logs, setLogs] = useState<any[]>([]);
@@ -43,7 +45,9 @@ export default function AdminModule({ profile }: { profile: any }) {
     businessName: profile?.businessName || 'FarmFresh Hub',
     businessAddress: profile?.businessAddress || 'Digwadih, Dhanbad, Jharkhand, 828113',
     businessEmail: profile?.businessEmail || 'chiranjeev972@gmail.com',
-    businessPhone: profile?.businessPhone || '8987766981'
+    businessPhone: profile?.businessPhone || '8987766981',
+    businessGSTIN: profile?.businessGSTIN || '24AAAAA1111A1Z1',
+    invoiceTerms: profile?.invoiceTerms || '1. Goods once sold will not be taken back.\n2. Subject to Dhanbad Jurisdiction.'
   });
 
   // New forms states
@@ -102,8 +106,13 @@ export default function AdminModule({ profile }: { profile: any }) {
         businessName: profile.businessName || 'FarmFresh Hub',
         businessAddress: profile.businessAddress || 'Digwadih, Dhanbad, Jharkhand, 828113',
         businessEmail: profile.businessEmail || 'chiranjeev972@gmail.com',
-        businessPhone: profile.businessPhone || '8987766981'
+        businessPhone: profile.businessPhone || '8987766981',
+        businessGSTIN: profile.businessGSTIN || '24AAAAA1111A1Z1',
+        invoiceTerms: profile.invoiceTerms || '1. Goods once sold will not be taken back.\n2. Subject to Dhanbad Jurisdiction.'
       });
+      if (profile.activeInvoiceTemplate) {
+        setActiveTemplate(profile.activeInvoiceTemplate);
+      }
     }
   }, [profile]);
 
@@ -165,9 +174,15 @@ export default function AdminModule({ profile }: { profile: any }) {
   }, [filter, profile]);
 
   // Handle Updates
-  const handleUpdateSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!auth.currentUser) return;
+  const handleUpdateSettings = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    const uid = profile?.uid || auth.currentUser?.uid;
+    if (!uid) {
+      alert("No active session detected.");
+      return;
+    }
     setIsSaving(true);
     try {
       if (!(await ensureVerified())) {
@@ -175,12 +190,35 @@ export default function AdminModule({ profile }: { profile: any }) {
         setIsSaving(false);
         return;
       }
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), businessSettings);
-      alert('Business profile updated successfully!');
+      await setDoc(doc(db, 'users', uid), {
+        uid: uid,
+        email: profile?.email || auth.currentUser?.email || '',
+        ...businessSettings,
+        activeInvoiceTemplate: activeTemplate
+      }, { merge: true });
+      alert('Business profile and invoice settings updated successfully!');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'users-profile');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSelectTemplate = async (templateId: string) => {
+    setActiveTemplate(templateId);
+    const uid = profile?.uid || auth.currentUser?.uid;
+    if (!uid) return;
+    try {
+      if (!(await ensureVerified())) {
+        alert("Action blocked. Your email is not verified. Please verify your email to select an invoice template.");
+        return;
+      }
+      await setDoc(doc(db, 'users', uid), {
+        activeInvoiceTemplate: templateId
+      }, { merge: true });
+      alert(`Invoice template updated to '${templateId}'!`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'users-profile');
     }
   };
 
@@ -192,11 +230,35 @@ export default function AdminModule({ profile }: { profile: any }) {
         alert("Action blocked. Email verification is required.");
         return;
       }
-      await addDoc(collection(db, 'suppliers'), {
+      const supRef = await addDoc(collection(db, 'suppliers'), {
         ...newSupplier,
         ownerId: profile.uid,
         createdAt: new Date().toISOString()
       });
+
+      // Auto-create Ledger Account for newly added supplier
+      try {
+        const ledgerName = `${newSupplier.name.trim()} (Supplier A/C)`;
+        const qLdr = query(
+          collection(db, 'ledger_accounts'),
+          where('ownerId', '==', profile.uid),
+          where('name', '==', ledgerName)
+        );
+        const ldrSnap = await getDocs(qLdr);
+        if (ldrSnap.empty) {
+          await addDoc(collection(db, 'ledger_accounts'), {
+            name: ledgerName,
+            type: 'Liability',
+            initialBalance: Number(newSupplier.balance) || 0,
+            ownerId: profile.uid,
+            supplierId: supRef.id,
+            createdAt: new Date().toISOString()
+          });
+        }
+      } catch (ldrErr) {
+        console.error("Failed to auto-create supplier ledger:", ldrErr);
+      }
+
       setNewSupplier({ name: '', phone: '', company: '', category: 'Feed', balance: 0 });
       setIsAddSupplierOpen(false);
     } catch (err) {
@@ -344,7 +406,7 @@ export default function AdminModule({ profile }: { profile: any }) {
   // Automated Cloud Snapshot Export system (Failsafe Backup)
   const handleCloudBackup = async () => {
     try {
-      const collectionsToBackup = ['inventory', 'sales', 'expenses', 'customers', 'suppliers', 'purchases'];
+      const collectionsToBackup = ['inventory', 'sales', 'expenses', 'customers', 'suppliers', 'purchases', 'batches', 'farmlogs', 'activity_logs'];
       const backupData: Record<string, any[]> = {};
       
       for (const colName of collectionsToBackup) {
@@ -377,6 +439,71 @@ export default function AdminModule({ profile }: { profile: any }) {
       console.error(err);
       alert("Error backing up cloud database. Please try again.");
     }
+  };
+
+  const handleRestoreBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!confirm("Are you sure you want to restore this data backup? This will overwrite or merge with your current cloud database documents. It is highly recommended to take a snapshot backup first.")) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        if (!data || typeof data !== 'object') {
+          throw new Error("Invalid backup payload format");
+        }
+
+        const collections = Object.keys(data);
+        if (collections.length === 0) {
+          throw new Error("Backup file contains no database collections");
+        }
+
+        alert("Starting secure database restore... please do not close this window.");
+
+        let restoredCount = 0;
+        
+        for (const colName of collections) {
+          const items = data[colName];
+          if (!Array.isArray(items)) continue;
+
+          for (const item of items) {
+            // Re-bind to current active user profile UID to ensure complete multi-tenant safety
+            const cleanItem = { ...item };
+            const docId = cleanItem.id;
+            delete cleanItem.id;
+            
+            if (cleanItem.ownerId !== undefined) cleanItem.ownerId = profile.uid;
+            if (cleanItem.userId !== undefined) cleanItem.userId = profile.uid;
+
+            if (docId) {
+              await setDoc(doc(db, colName, docId), cleanItem);
+            } else {
+              await addDoc(collection(db, colName), cleanItem);
+            }
+            restoredCount++;
+          }
+        }
+
+        // Add backup restoration log
+        await addDoc(collection(db, 'backups'), {
+          ownerId: profile.uid,
+          version: `r3.${Date.now().toString().slice(-4)}`,
+          date: new Date().toISOString(),
+          status: 'Restored Merged',
+          size: `${(JSON.stringify(data).length / 1024).toFixed(2)} KB`,
+          createdBy: profile.name || 'Admin'
+        });
+
+        alert(`Database snapshot restored successfully! Processed and restored ${restoredCount} records.`);
+        window.location.reload();
+      } catch (err: any) {
+        console.error("Backup Restore Error:", err);
+        alert("Failed to parse and restore database: " + (err?.message || String(err)));
+      }
+    };
+    reader.readAsText(file);
   };
 
   // WhatsApp Alert Simulation Trigger
@@ -435,6 +562,7 @@ export default function AdminModule({ profile }: { profile: any }) {
         {[
           { id: 'profile', label: 'Settings & Health', icon: <Building2 size={16} /> },
           { id: 'suppliers', label: 'Supplier & Purchases', icon: <Briefcase size={16} /> },
+          { id: 'invoice', label: 'Invoice Settings', icon: <FileText size={16} /> },
           { id: 'qr', label: 'QR & Barcode Tags', icon: <QrCode size={16} /> },
           { id: 'cloud', label: 'Cloud Snapshot & Sync', icon: <Cloud size={16} /> },
           { id: 'alerts', label: 'WhatsApp & Smart Alerts', icon: <Bell size={16} /> },
@@ -501,12 +629,200 @@ export default function AdminModule({ profile }: { profile: any }) {
                     </div>
                   </div>
                   <div className="flex justify-end">
-                    <Button type="submit" disabled={isSaving} className="rounded-xl bg-stone-900 text-white h-12 px-8 flex gap-2">
+                    <Button 
+                      type="submit" 
+                      onClick={(e) => handleUpdateSettings(e)}
+                      disabled={isSaving} 
+                      className="rounded-xl bg-stone-900 text-white h-12 px-8 flex gap-2"
+                    >
                       <Save size={18} />
                       {isSaving ? 'Saving...' : 'Save Profile'}
                     </Button>
                   </div>
                 </form>
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* SaaS Pricing Plans & Subscriptions */}
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <Key className="text-orange-600" size={24} />
+              <div className="flex-1">
+                <h2 className="text-2xl font-bold text-stone-900 tracking-tight">Active Plan & Subscription Tier</h2>
+                <p className="text-stone-500 text-xs">Switch your subscription model to instantly change active scale limits and access privileges.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                {
+                  key: "starter",
+                  name: "Starter Plan",
+                  price: "₹299/mo",
+                  desc: "Ideal for individual farm keepers tracking simple stock counts.",
+                  color: "border-stone-200 bg-white hover:border-orange-200",
+                  activeColor: "border-stone-900 ring-2 ring-stone-950/10",
+                  features: [
+                    "Up to 2 Live Batches Tracking",
+                    "Stock Inventory (Chicken/Birds)",
+                    "POS Billing & Standard Receipts",
+                    "SLA Standard Guarantee Support"
+                  ]
+                },
+                {
+                  key: "business",
+                  name: "Business Suite",
+                  price: "₹799/mo",
+                  desc: "Tailored for expanding commercial farms & retail storefronts.",
+                  color: "border-stone-200 bg-white hover:border-orange-200",
+                  activeColor: "border-orange-500 ring-2 ring-orange-500/10",
+                  features: [
+                    "Unlimited Live Batches Tracking",
+                    "Multi-Species Category (Chicken, Duck, Goat, Fish)",
+                    "Tax Invoice Generation with GST & HSN codes",
+                    "One-click WhatsApp Invoices & Reminders"
+                  ]
+                },
+                {
+                  key: "enterprise",
+                  name: "Enterprise Custom",
+                  price: "₹1499/mo",
+                  desc: "Advanced industrial framework with connected databases & nodes.",
+                  color: "border-stone-200 bg-white hover:border-orange-200",
+                  activeColor: "border-purple-600 ring-2 ring-purple-600/10",
+                  features: [
+                    "Everything in Business Suite",
+                    "IoT Weighing Scales & Smart Integrations",
+                    "Franchise Branches & Warehouse Synclinks",
+                    "Predictive AI Insights & custom broker deduction rules"
+                  ]
+                }
+              ].map((plan) => {
+                const isActive = (profile?.subscriptionType || '').toLowerCase().includes(plan.key);
+                return (
+                  <Card 
+                    key={plan.key} 
+                    className={`rounded-3xl border p-6 flex flex-col justify-between transition-all duration-200 shadow-sm relative overflow-hidden ${
+                      isActive ? plan.activeColor : plan.color
+                    }`}
+                  >
+                    {isActive && (
+                      <div className="absolute top-3 right-3 bg-stone-900 text-white rounded-full p-1 shadow-sm">
+                        <Check size={12} className="stroke-[3]" />
+                      </div>
+                    )}
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex items-baseline gap-2">
+                          <h3 className="text-lg font-bold text-stone-900">{plan.name}</h3>
+                          {isActive && (
+                            <Badge variant="outline" className="text-[9px] font-black uppercase border-emerald-500 bg-emerald-50 text-emerald-700 px-2 rounded-full">
+                              Active Tier
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-stone-500 mt-1 leading-relaxed">{plan.desc}</p>
+                      </div>
+                      <div className="py-2 border-y border-stone-100">
+                        <span className="text-3xl font-black text-stone-950">{plan.price}</span>
+                      </div>
+                      <ul className="space-y-2">
+                        {plan.features.map((feat, i) => (
+                          <li key={i} className="flex items-start gap-2 text-xs font-medium text-stone-600">
+                            <CheckCircle2 size={14} className="text-emerald-600 shrink-0 mt-0.5" />
+                            <span>{feat}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    <Button 
+                      onClick={async () => {
+                        try {
+                          const userRef = doc(db, 'users', profile.uid);
+                          await updateDoc(userRef, {
+                            subscriptionType: plan.key
+                          });
+                          alert(`Successfully subscribed to ${plan.name}! All permissions have been instantly allocated.`);
+                        } catch (err) {
+                          console.error(err);
+                          alert("Failed to update pricing plan. Please verify active database connections.");
+                        }
+                      }}
+                      className={`w-full mt-6 h-11 rounded-xl text-xs font-bold tracking-wider transition-all duration-200 ${
+                        isActive 
+                          ? 'bg-stone-100 text-stone-400 cursor-not-allowed hover:bg-stone-100' 
+                          : 'bg-stone-950 text-white hover:bg-stone-850'
+                      }`}
+                      disabled={isActive}
+                    >
+                      {isActive ? 'Current Active Tier' : `Activate ${plan.name}`}
+                    </Button>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Module Controls and Dashboard Switchboards */}
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <Smartphone className="text-orange-600" size={24} />
+              <div className="flex-1">
+                <h2 className="text-2xl font-bold text-stone-900 tracking-tight">App Control Center & Feature Toggles</h2>
+                <p className="text-stone-500 text-xs">Directly toggle which module panels are rendered inside the helper sidebar navigation menus.</p>
+              </div>
+            </div>
+            <Card className="rounded-[2rem] border-stone-200 shadow-sm overflow-hidden bg-white">
+              <CardContent className="p-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                  {[
+                    { id: 'farm', label: 'Farm Management & Batches', icon: '🐣', desc: 'Track batches lifecycles, mortalities, vaccine alerts and feed layouts.' },
+                    { id: 'shop', label: 'POS Billing & Shop Sales', icon: '🛍️', desc: 'Accept direct orders, generate custom clean invoices and draft receipts.' },
+                    { id: 'inventory', label: 'Stock Management & Inventory', icon: '📦', desc: 'Regulate warehouse items, automatic raw feed stocks and dynamic counts.' },
+                    { id: 'accounts', label: 'Ledger Accounts & Balance', icon: '💼', desc: 'Track active supplier payments, ledger logs, bank cash reserves and receipts.' },
+                    { id: 'customers', label: 'Customer Directory & CRM', icon: '👥', desc: 'Manage loyal buyers, customized profiles, contact logs and historical transactions.' },
+                    { id: 'delivery', label: 'Delivery & Shipping Logistics', icon: '🚚', desc: 'Fulfill bulk fleet delivery, optimize dispatch logs and track order routes.' },
+                    { id: 'advanced_reports', label: 'Financial Reporting & Profit/Loss', icon: '📊', desc: 'Advanced profit and loss statements, tax summaries and sheets.' },
+                    { id: 'analytics', label: 'Predictive Smart AI & Graphs', icon: '📈', desc: 'Forecast demand, predict performance metrics, and view visual analytics.' }
+                  ].map((feat) => {
+                    const toggles = profile?.featureToggles || {};
+                    const isEnabled = toggles[feat.id] !== false; // Active by default if not set
+                    return (
+                      <div key={feat.id} className="flex items-center justify-between py-4 border-b border-stone-100 last:border-none">
+                        <div className="space-y-1 pr-6 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{feat.icon}</span>
+                            <span className="text-sm font-bold text-stone-900">{feat.label}</span>
+                          </div>
+                          <p className="text-xs text-stone-500 leading-normal">{feat.desc}</p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (!profile?.uid) return;
+                            try {
+                              const userRef = doc(db, 'users', profile.uid);
+                              await setDoc(userRef, {
+                                [`featureToggles.${feat.id}`]: !isEnabled
+                              }, { merge: true });
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className={`w-14 h-7 rounded-full transition-colors duration-200 flex items-center p-1 relative focus:outline-none shrink-0 ${
+                            isEnabled ? 'bg-orange-600' : 'bg-stone-200'
+                          }`}
+                        >
+                          <div 
+                            className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-200 ${
+                              isEnabled ? 'translate-x-7' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           </section>
@@ -532,6 +848,11 @@ export default function AdminModule({ profile }: { profile: any }) {
                       <div>
                         <p className="text-[10px] font-black uppercase text-stone-400 tracking-widest">{item.label}</p>
                         <p className="text-sm font-bold text-stone-900">{item.status}</p>
+                        {item.label === 'Cloud Firestore' && (
+                          <span className="text-[10px] bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded font-mono font-medium block mt-1 w-max">
+                            DB: {firebaseConfig.firestoreDatabaseId || '(default)'}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
@@ -812,17 +1133,37 @@ export default function AdminModule({ profile }: { profile: any }) {
           <div className="grid md:grid-cols-3 gap-6">
             {/* Database snapshot Card */}
             <Card className="rounded-[2rem] border-stone-200 shadow-sm p-8 space-y-6 flex flex-col justify-between">
-              <div className="space-y-2">
+              <div className="space-y-4">
                 <div className="p-3 bg-orange-50 text-orange-600 rounded-2xl w-12 h-12 flex items-center justify-center">
                   <Cloud size={24} />
                 </div>
                 <h3 className="font-bold text-stone-900 text-lg">Cloud Snapshot Snapshotter</h3>
-                <p className="text-stone-500 text-xs leading-relaxed">Runs zero-latency scans of active collections, compressing keys down into client-executable JSON logs.</p>
+                <p className="text-stone-500 text-xs leading-relaxed font-normal">Runs zero-latency scans of active collections, compressing keys down into client-executable JSON logs.</p>
+                <div className="text-[11px] bg-stone-100 text-stone-700 px-3 py-1.5 rounded-xl font-mono font-medium inline-block border border-stone-200">
+                  Target DB ID: <span className="font-bold text-orange-600">{firebaseConfig.firestoreDatabaseId || '(default)'}</span>
+                </div>
               </div>
-              <Button onClick={handleCloudBackup} className="rounded-xl w-full bg-stone-900 text-white h-11">
-                <Download size={16} className="mr-1.5" />
-                Take DB Snapshot
-              </Button>
+              <div className="space-y-2">
+                <Button onClick={handleCloudBackup} className="rounded-xl w-full bg-stone-900 text-white h-11">
+                  <Download size={16} className="mr-1.5" />
+                  Take DB Snapshot
+                </Button>
+                <Button 
+                  onClick={() => document.getElementById('restore-backup-upload')?.click()} 
+                  variant="outline" 
+                  className="rounded-xl w-full border-stone-200 h-11 hover:bg-stone-50"
+                >
+                  <RefreshCw size={16} className="mr-1.5" />
+                  Restore DB Snapshot
+                </Button>
+                <input 
+                  type="file" 
+                  accept=".json" 
+                  id="restore-backup-upload" 
+                  className="hidden" 
+                  onChange={handleRestoreBackup} 
+                />
+              </div>
             </Card>
 
             {/* Database Sync Multi branch configuration Card */}
@@ -1017,6 +1358,231 @@ export default function AdminModule({ profile }: { profile: any }) {
               </Button>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* Invoice Settings Tab */}
+      {adminTab === 'invoice' && (
+        <div className="space-y-8 animate-fade-in">
+          <div>
+            <h2 className="text-2xl font-bold text-stone-900">Invoice Customization & Templates</h2>
+            <p className="text-stone-500 text-sm mt-1">Select from multiple high-fidelity layout styles, brand accents, and customize dynamic business profiles below.</p>
+          </div>
+
+          {/* Multiple Invoice Templates Section */}
+          <section className="space-y-4">
+            <h3 className="text-sm font-black uppercase text-stone-400 tracking-widest flex items-center gap-2">
+              <Layers size={14} className="text-orange-500" />
+              Available Invoice Layouts
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {[
+                {
+                  id: "classic",
+                  name: "Classic Minimalist",
+                  accent: "border-stone-200 bg-white hover:border-stone-400",
+                  activeAccent: "border-stone-900 ring-4 ring-stone-900/10",
+                  desc: "Clean layout, neutral gray tones, standard tabular lists. Perfect for general storefront invoice look.",
+                  preview: (
+                    <div className="bg-stone-50 p-4 rounded-xl border border-stone-250 font-sans text-[9px] space-y-2 opacity-80">
+                      <div className="border-b pb-1 font-bold text-stone-850">CLASSIC BILLING</div>
+                      <div className="flex justify-between">
+                        <span>INV# 2026-003</span>
+                        <span>02/06/2026</span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="bg-stone-200 h-1.5 w-full rounded" />
+                        <div className="bg-stone-200 h-1.5 w-2/3 rounded" />
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  id: "orange",
+                  name: "Modern Bold Orange",
+                  accent: "border-stone-200 bg-white hover:border-orange-400",
+                  activeAccent: "border-orange-500 ring-4 ring-orange-500/10",
+                  desc: "Tech-accented custom look, orange titles, and styled headers matching Farm Fresh Hub brand assets.",
+                  preview: (
+                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-200 font-sans text-[9px] space-y-2 opacity-85">
+                      <div className="border-b border-orange-200 pb-1 font-extrabold text-orange-600">FARM FRESH HUB INVOICE</div>
+                      <div className="flex justify-between text-orange-800">
+                        <span>INV# CM-9411</span>
+                        <span>02/06/2026</span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="bg-orange-200 h-1.5 w-full rounded" />
+                        <div className="bg-orange-200 h-1.5 w-4/5 rounded" />
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  id: "thermal",
+                  name: "Industrial Thermal Receipt",
+                  accent: "border-stone-200 bg-white hover:border-stone-405",
+                  activeAccent: "border-emerald-500 ring-4 ring-emerald-500/10",
+                  desc: "Compact, light layout with monospaced style and dashed dividers. Optimized for thermal POS printers.",
+                  preview: (
+                    <div className="bg-stone-900 text-stone-300 p-4 rounded-xl border border-stone-800 font-mono text-[8px] space-y-2">
+                      <div className="text-center font-bold text-white border-b border-dashed border-stone-700 pb-1">*** THERMAL ***</div>
+                      <div>INV-02219  02/06/2026</div>
+                      <div className="border-t border-dashed border-stone-700 pt-1 space-y-1">
+                        <div className="flex justify-between"><span>QTY 10 CHICKEN</span><span>2400.00</span></div>
+                        <div className="flex justify-between"><span>TAX COMPLETE</span><span>120.00</span></div>
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  id: "premium",
+                  name: "Premium Slate Indigo",
+                  accent: "border-stone-200 bg-white hover:border-indigo-400",
+                  activeAccent: "border-indigo-600 ring-4 ring-indigo-600/10",
+                  desc: "Deep indigo accents, clean grids, and top-header spacing giving an elegant corporate enterprise mood.",
+                  preview: (
+                    <div className="bg-white p-4 rounded-xl border border-indigo-200 font-serif text-[9px] space-y-2 opacity-85">
+                      <div className="border-b-2 border-indigo-600 pb-1 font-bold text-indigo-900 italic">Enterprise Premium</div>
+                      <div className="flex justify-between font-sans text-stone-500">
+                        <span>Doc Ref: IND-92</span>
+                        <span>02/06/2026</span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="bg-indigo-50 h-1.5 w-full rounded" />
+                        <div className="bg-indigo-50 h-1.5 w-3/4 rounded" />
+                      </div>
+                    </div>
+                  )
+                }
+              ].map((tpl) => {
+                const isCurrent = activeTemplate === tpl.id;
+                return (
+                  <Card 
+                    key={tpl.id} 
+                    className={`rounded-2xl border p-4 flex flex-col justify-between transition-all duration-200 shadow-xs relative overflow-hidden cursor-pointer ${
+                      isCurrent ? tpl.activeAccent : tpl.accent
+                    }`}
+                    onClick={() => handleSelectTemplate(tpl.id)}
+                  >
+                    {isCurrent && (
+                      <div className="absolute top-2 right-2 bg-stone-900 text-white rounded-full p-1 shadow-sm z-10">
+                        <Check size={10} className="stroke-[3]" />
+                      </div>
+                    )}
+                    <div className="space-y-3">
+                      <div className="relative">
+                        {tpl.preview}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-stone-900 flex items-center gap-1.5">
+                          {tpl.name}
+                          {isCurrent && (
+                            <Badge className="bg-orange-500 text-white font-black text-[8px] h-4 py-0 px-1 border-none">
+                              Active
+                            </Badge>
+                          )}
+                        </h4>
+                        <p className="text-stone-400 text-[10px] leading-relaxed mt-1">{tpl.desc}</p>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelectTemplate(tpl.id);
+                      }}
+                      className={`h-9 rounded-xl mt-4 w-full text-xs font-bold ${
+                        isCurrent 
+                          ? 'bg-stone-900 text-white hover:bg-stone-850' 
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                      }`}
+                    >
+                      {isCurrent ? "Active Template" : "Select Template"}
+                    </Button>
+                  </Card>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* Business Details custom form synchronization */}
+          <section className="space-y-4">
+            <h3 className="text-sm font-black uppercase text-stone-400 tracking-widest flex items-center gap-2">
+              <Building2 size={14} className="text-orange-500" />
+              Connected Business Details & Profile Settings
+            </h3>
+            <Card className="rounded-[2rem] border-stone-200 shadow-sm overflow-hidden">
+              <CardContent className="p-8">
+                <form onSubmit={handleUpdateSettings} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase text-stone-400">Business / Shop Name</Label>
+                      <Input 
+                        value={businessSettings.businessName}
+                        onChange={e => setBusinessSettings({...businessSettings, businessName: e.target.value})}
+                        className="rounded-xl h-12"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase text-stone-400">Contact Number</Label>
+                      <Input 
+                        value={businessSettings.businessPhone}
+                        onChange={e => setBusinessSettings({...businessSettings, businessPhone: e.target.value})}
+                        className="rounded-xl h-12"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase text-stone-400">Business Email</Label>
+                      <Input 
+                        value={businessSettings.businessEmail}
+                        onChange={e => setBusinessSettings({...businessSettings, businessEmail: e.target.value})}
+                        className="rounded-xl h-12"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase text-stone-400">Full Address</Label>
+                      <Input 
+                        value={businessSettings.businessAddress}
+                        onChange={e => setBusinessSettings({...businessSettings, businessAddress: e.target.value})}
+                        className="rounded-xl h-12"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase text-stone-400">GSTIN / Tax Identifier</Label>
+                      <Input 
+                        value={businessSettings.businessGSTIN}
+                        onChange={e => setBusinessSettings({...businessSettings, businessGSTIN: e.target.value})}
+                        className="rounded-xl h-12"
+                        placeholder="e.g. 24AAAAA1111A1Z1"
+                      />
+                    </div>
+                    <div className="space-y-2 col-span-1 md:col-span-2">
+                      <Label className="text-xs font-bold uppercase text-stone-400">Invoicing Terms, Bank Details, and Conditions</Label>
+                      <textarea 
+                        rows={3}
+                        value={businessSettings.invoiceTerms}
+                        onChange={e => setBusinessSettings({...businessSettings, invoiceTerms: e.target.value})}
+                        className="w-full text-sm p-3.5 border border-stone-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                        placeholder="e.g. 1. Goods once sold will not be taken back."
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-2 border-t border-stone-100 flex-col md:flex-row items-center gap-3">
+                    <p className="text-stone-400 text-[10px] italic">Setting values above dynamically updates tags, PDF builds, and POS invoicing models immediately.</p>
+                    <Button 
+                      type="submit" 
+                      onClick={(e) => handleUpdateSettings(e)}
+                      disabled={isSaving} 
+                      className="rounded-xl bg-stone-900 text-white h-12 px-8 flex gap-2 w-full md:w-auto"
+                    >
+                      <Save size={18} />
+                      {isSaving ? 'Syncing Profile...' : 'Save Settings & Templates'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </section>
         </div>
       )}
 

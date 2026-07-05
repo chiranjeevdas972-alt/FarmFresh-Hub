@@ -4,11 +4,24 @@ import { Bell, X, Info, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-
 import { Button } from './ui/button';
 import { db, auth } from '../lib/firebase';
 import { format } from 'date-fns';
+import { safeLocalStorage } from '../lib/utils';
+
+const localStorage = safeLocalStorage;
 
 export default function NotificationCenter() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
-  const userId = auth.currentUser?.uid;
+  const getUserId = () => {
+    if (auth.currentUser?.uid) return auth.currentUser.uid;
+    try {
+      const stored = localStorage.getItem('demo_bypass_user');
+      if (stored) {
+        return JSON.parse(stored).uid;
+      }
+    } catch (e) {}
+    return null;
+  };
+  const userId = getUserId();
 
   useEffect(() => {
     if (!userId) return;
