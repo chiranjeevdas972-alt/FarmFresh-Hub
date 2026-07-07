@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User as FirebaseUser } from 'firebase/auth';
-import { Bird, ShoppingBag, LayoutDashboard, LogOut, Package, History, BrainCircuit, Plus, Users, Wallet, BarChart3, Truck, FileText, ShieldCheck, ArrowLeft, Menu, X, Lock, Sparkles, Check } from 'lucide-react';
+import { Bird, ShoppingBag, LayoutDashboard, LogOut, Package, History, BrainCircuit, Plus, Users, Wallet, BarChart3, Truck, FileText, ShieldCheck, ArrowLeft, Menu, X, Lock, Sparkles, Check, Search } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
@@ -54,6 +54,7 @@ const HenIcon = ({ size = 24, className = "" }: { size?: number, className?: str
 
 export default function Dashboard({ user, profile, onLogout, onUpgrade }: DashboardProps) {
   const [activeTab, setActiveTab] = useState('overview');
+  const [searchTerm, setSearchTerm] = useState('');
   const [inventoryFilter, setInventoryFilter] = useState<string>('all');
   const [moduleAction, setModuleAction] = useState<string | null>(null);
   const [isQuickActionOpen, setIsQuickActionOpen] = useState(false);
@@ -146,6 +147,39 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
     return true;
   });
 
+  const filteredMenuItems = visibleMenuItems.filter(item => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    
+    // Match label translated or untranslated
+    const labelLower = item.label.toLowerCase();
+    if (labelLower.includes(searchLower)) return true;
+    
+    // Match ID / tags (e.g. form, analysis, delivery, financials, shop, inventory, etc.)
+    if (item.id.toLowerCase().includes(searchLower)) return true;
+    
+    // Custom smart synonyms requested by user:
+    // "Form, you can search it" -> matching farm, inventory, or billing entry forms
+    if (searchLower === 'form') {
+      return ['farm', 'shop', 'inventory', 'accounts'].includes(item.id);
+    }
+    // "Admin panel, you can search analysis, delivery"
+    if (searchLower === 'analysis') {
+      return ['analytics', 'advanced_reports', 'admin'].includes(item.id);
+    }
+    if (searchLower === 'delivery') {
+      return item.id === 'delivery';
+    }
+    if (searchLower === 'shop') {
+      return item.id === 'shop';
+    }
+    if (searchLower === 'inventory') {
+      return item.id === 'inventory';
+    }
+    
+    return false;
+  });
+
   const isFeatureDisabled = (tabId: string) => {
     if (tabId === 'overview' || tabId === 'admin') return false;
     const toggles = profile?.featureToggles || {};
@@ -206,8 +240,30 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
           </button>
         </div>
 
+        {/* Feature Navigation Search */}
+        <div className="px-4 py-2 border-b border-stone-100 bg-stone-50/50">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" size={14} />
+            <input
+              type="text"
+              placeholder="Search features (Shop, Form, Admin)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-stone-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 transition-all text-stone-700"
+            />
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')} 
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 rounded-full hover:bg-stone-100 transition-all"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </div>
+
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {visibleMenuItems.map((item) => {
+          {filteredMenuItems.map((item) => {
             const reqPlan = isPlanGated(item.id);
             return (
               <button
@@ -229,6 +285,11 @@ export default function Dashboard({ user, profile, onLogout, onUpgrade }: Dashbo
               </button>
             );
           })}
+          {filteredMenuItems.length === 0 && (
+            <div className="text-center py-8 text-stone-400 text-xs">
+              No matching features found
+            </div>
+          )}
         </nav>
 
         <div className="p-4 border-t border-stone-100">
