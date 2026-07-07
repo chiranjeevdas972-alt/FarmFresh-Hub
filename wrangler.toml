@@ -2,5 +2,7 @@
 name = "farmfresh-hub"
 compatibility_date = "2024-11-01"
 
-# 1. Configuration for Cloudflare Pages Deployment
-pages_build_output_dir = "./dist"
+# Configuration for Cloudflare Workers Static Assets
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
