@@ -13,3 +13,22 @@
 
   # 5. Restrict Peripheral Interface Devices
   Permissions-Policy: camera=(), microphone=(), geolocation=(), usb=()
+
+# Precise Content-Type and Cache-Control headers for static assets
+/assets/*.js
+  Content-Type: application/javascript; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.css
+  Content-Type: text/css; charset=utf-8
+  X-Content-Type-Options: nosniff
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.js
+  Content-Type: application/javascript; charset=utf-8
+  X-Content-Type-Options: nosniff
+
+/*.css
+  Content-Type: text/css; charset=utf-8
+  X-Content-Type-Options: nosniff
