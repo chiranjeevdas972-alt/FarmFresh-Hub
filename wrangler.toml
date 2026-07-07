@@ -4,8 +4,3 @@ compatibility_date = "2024-11-01"
 
 # 1. Configuration for Cloudflare Pages Deployment
 pages_build_output_dir = "./dist"
-
-# 2. Configuration for Cloudflare Workers with Assets (Modern Unified Pipeline)
-[assets]
-directory = "./dist"
-binding = "ASSETS"
