@@ -1,5 +1,5 @@
 # wrangler.toml - Production-Ready Cloudflare Deployment Configuration
-name = "farmfresh-hub"
+name = "fresh"
 compatibility_date = "2024-11-01"
 
 # Configuration for Cloudflare Workers Static Assets
