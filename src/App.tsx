@@ -126,7 +126,7 @@ export default function App() {
                 businessName: 'FarmFresh Hub',
                 businessAddress: 'Digwadih, Dhanbad, Jharkhand, 828113',
                 businessEmail: currentUser.email || 'contact@farmfreshhub.app',
-                businessPhone: '8987766981'
+                businessPhone: '9288517027'
               };
               await setDoc(userRef, newProfile);
               setProfile(newProfile);
@@ -147,7 +147,7 @@ export default function App() {
               businessName: 'FarmFresh Hub (Offline)',
               businessAddress: 'Digwadih, Dhanbad, Jharkhand, 828113',
               businessEmail: currentUser.email || 'contact@farmfreshhub.app',
-              businessPhone: '8987766981'
+              businessPhone: '9288517027'
             };
             setProfile(fallbackProfile);
             setLoading(false);

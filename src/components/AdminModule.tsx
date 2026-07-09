@@ -45,7 +45,7 @@ export default function AdminModule({ profile }: { profile: any }) {
     businessName: profile?.businessName || 'FarmFresh Hub',
     businessAddress: profile?.businessAddress || 'Digwadih, Dhanbad, Jharkhand, 828113',
     businessEmail: profile?.businessEmail || 'chiranjeev972@gmail.com',
-    businessPhone: profile?.businessPhone || '8987766981',
+    businessPhone: profile?.businessPhone || '9288517027',
     businessGSTIN: profile?.businessGSTIN || '24AAAAA1111A1Z1',
     invoiceTerms: profile?.invoiceTerms || '1. Goods once sold will not be taken back.\n2. Subject to Dhanbad Jurisdiction.'
   });
@@ -88,7 +88,7 @@ export default function AdminModule({ profile }: { profile: any }) {
     maxTemp: 34,
     minTemp: 18,
     lowStockThreshold: 10,
-    whatsappRecipient: profile?.businessPhone || '8987766981',
+    whatsappRecipient: profile?.businessPhone || '9288517027',
     whatsappMessage: '⚠️ FarmFresh Hub Warning Summary: Core feed stock inventory has hit critially low levels. Action required.'
   });
 
@@ -106,7 +106,7 @@ export default function AdminModule({ profile }: { profile: any }) {
         businessName: profile.businessName || 'FarmFresh Hub',
         businessAddress: profile.businessAddress || 'Digwadih, Dhanbad, Jharkhand, 828113',
         businessEmail: profile.businessEmail || 'chiranjeev972@gmail.com',
-        businessPhone: profile.businessPhone || '8987766981',
+        businessPhone: profile.businessPhone || '9288517027',
         businessGSTIN: profile.businessGSTIN || '24AAAAA1111A1Z1',
         invoiceTerms: profile.invoiceTerms || '1. Goods once sold will not be taken back.\n2. Subject to Dhanbad Jurisdiction.'
       });

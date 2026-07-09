@@ -557,7 +557,7 @@ export default function ShopModule({ action, onActionComplete, profile }: { acti
     const bName = (profile?.businessName || 'CHICKMART').toUpperCase();
     const bAddr = profile?.businessAddress || 'Digwadih, Dhanbad, Jharkhand, 828113';
     const bEmail = profile?.businessEmail || 'chiranjeev972@gmail.com';
-    const bPhone = profile?.businessPhone || '8987766981';
+    const bPhone = profile?.businessPhone || '9288517027';
     const bGst = profile?.businessGSTIN || '24AAAAA1111A1Z1';
     const bTemplate = profile?.activeInvoiceTemplate || 'classic';
     

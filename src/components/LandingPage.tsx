@@ -1528,7 +1528,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                     </div>
                     <div>
                       <p className="text-[9px] font-mono font-bold text-stone-400 uppercase tracking-widest leading-none">Call Support Line</p>
-                      <a href="tel:+918987766981" className="text-base font-bold text-stone-900 mt-1 block hover:text-orange-600 transition-colors">+91 8987766981</a>
+                      <a href="tel:+919288517027" className="text-base font-bold text-stone-900 mt-1 block hover:text-orange-600 transition-colors">+91 9288517027</a>
                     </div>
                   </div>
 
@@ -1538,7 +1538,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                     </div>
                     <div>
                       <p className="text-[9px] font-mono font-bold text-stone-400 uppercase tracking-widest leading-none">WhatsApp Support</p>
-                      <a href="https://wa.me/918987766981?text=Hello%20FarmFresh%20Hub%20Support,%20I'm%20interested%20in%20onboarding%20my%20farm." target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-green-600 mt-1 block hover:underline">Chat on WhatsApp</a>
+                      <a href="https://wa.me/919288517027?text=Hello%20FarmFresh%20Hub%20Support,%20I'm%20interested%20in%20onboarding%20my%20farm." target="_blank" rel="noopener noreferrer" className="text-sm font-bold text-green-600 mt-1 block hover:underline">Chat on WhatsApp</a>
                     </div>
                   </div>
 
@@ -1648,7 +1648,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                           name="phoneNumber"
                           value={formData.phoneNumber}
                           onChange={handleInquiryChange}
-                          placeholder="+91 89877 66981"
+                          placeholder="+91 92885 17027"
                           className="w-full h-13 pl-11 pr-4 rounded-xl border border-stone-250 bg-white text-xs font-bold focus:border-orange-500 focus:ring-4 focus:ring-orange-100"
                         />
                       </div>
@@ -1773,7 +1773,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
                         name="phoneNumber"
                         value={partnerFormData.phoneNumber}
                         onChange={handlePartnerChange}
-                        placeholder="+91 89877 66981"
+                        placeholder="+91 92885 17027"
                         className="w-full h-12 px-4 rounded-xl border border-stone-250 bg-white text-xs font-semibold focus:border-orange-500"
                       />
                     </div>
@@ -1890,7 +1890,7 @@ export default function LandingPage({ onLogin, onPlanSelect }: LandingPageProps)
             <div className="space-y-3 font-semibold col-span-2 sm:col-span-1">
               <h5 className="text-xs font-black text-white uppercase tracking-widest leading-none">Contact Coordinates</h5>
               <div className="flex flex-col gap-1.5 text-xs text-stone-500 font-medium">
-                <span>Phone: +91 89877 66981</span>
+                <span>Phone: +91 92885 17027</span>
                 <span>cvidyasolutions@gmail.com</span>
                 <span>chiranjeev0058@gmail.com</span>
                 <span className="text-[10px] text-stone-600 mt-1 uppercase font-black tracking-wider">DIRECTOR/FOUNDER: CHIRANJEEV DAS</span>

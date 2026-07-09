@@ -289,7 +289,7 @@ export default function SecurityPolicyModal({ isOpen, onClose, initialTab = 'ter
                 <p className="text-stone-500 text-xs mt-1 leading-normal font-medium">
                   Chiranjeev Das (Dhanbad, Jharkhand, India)
                   <br />
-                  Emergency Core Hotline: +91 89877 66981 | Emails: cvidyasolutions@gmail.com / chiranjeev0058@gmail.com
+                  Emergency Core Hotline: +91 92885 17027 | Emails: cvidyasolutions@gmail.com / chiranjeev0058@gmail.com
                 </p>
               </div>
             </div>
